@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cookie Guardian</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-icon">&#x1F36A;</div>
+    <div class="header-text">
+      <span class="header-title">Cookie Guardian</span>
+      <span class="header-sub">Consent Automation</span>
+    </div>
+    <div class="master-toggle-wrap">
+      <label class="toggle" title="Enable / Disable extension">
+        <input type="checkbox" id="masterToggle" />
+        <span class="toggle-track">
+          <span class="toggle-thumb"></span>
+        </span>
+      </label>
+    </div>
+  </header>
+
+  <!-- ── Main content ───────────────────────────────────────────── -->
+  <main class="main" id="mainContent">
+
+    <!-- Preference Cards -->
+    <section class="section">
+      <p class="section-label">Default Preference</p>
+      <div class="pref-grid">
+
+        <label class="pref-card" id="cardReject">
+          <input type="radio" name="preference" value="reject" class="pref-radio" />
+          <div class="pref-icon pref-icon--reject">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"
+                    fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="pref-body">
+            <span class="pref-title">Reject All</span>
+            <span class="pref-desc">Only strictly necessary cookies</span>
+          </div>
+          <span class="pref-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="currentColor"/>
+            </svg>
+          </span>
+        </label>
+
+        <label class="pref-card" id="cardModerate">
+          <input type="radio" name="preference" value="moderate" class="pref-radio" />
+          <div class="pref-icon pref-icon--moderate">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+                    fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="pref-body">
+            <span class="pref-title">Moderate Reject</span>
+            <span class="pref-desc">Try to reject — accept if no option exists</span>
+          </div>
+          <span class="pref-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="currentColor"/>
+            </svg>
+          </span>
+        </label>
+
+        <label class="pref-card" id="cardAccept">
+          <input type="radio" name="preference" value="accept" class="pref-radio" />
+          <div class="pref-icon pref-icon--accept">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14l-4-4 1.41-1.41L10 13.17l6.59-6.59L18 8l-8 8z"
+                    fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="pref-body">
+            <span class="pref-title">Accept All</span>
+            <span class="pref-desc">Allow all cookies &amp; trackers</span>
+          </div>
+          <span class="pref-check">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="currentColor"/>
+            </svg>
+          </span>
+        </label>
+
+      </div>
+    </section>
+
+    <!-- Options -->
+    <section class="section">
+      <p class="section-label">Options</p>
+      <div class="option-list">
+        <label class="option-row">
+          <span class="option-text">
+            <span class="option-title">Show activity badge</span>
+            <span class="option-desc">Flash a ✓ badge when a banner is handled</span>
+          </span>
+          <label class="toggle toggle--sm">
+            <input type="checkbox" id="showNotifications" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </label>
+
+        <label class="option-row">
+          <span class="option-text">
+            <span class="option-title">Debug logging</span>
+            <span class="option-desc">Output detailed logs to DevTools console</span>
+          </span>
+          <label class="toggle toggle--sm">
+            <input type="checkbox" id="debugMode" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </label>
+      </div>
+    </section>
+
+    <!-- Save button -->
+    <button class="save-btn" id="saveBtn">
+      <span class="save-btn-text">Save Settings</span>
+      <span class="save-btn-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4zm-5 16a3 3 0 110-6 3 3 0 010 6zm3-10H5V5h10v4z"
+                fill="currentColor"/>
+        </svg>
+      </span>
+    </button>
+
+    <!-- Status toast -->
+    <div class="toast" id="toast" aria-live="polite"></div>
+
+  </main>
+
+  <!-- ── Disabled overlay ───────────────────────────────────────── -->
+  <div class="disabled-overlay" id="disabledOverlay">
+    <div class="disabled-msg">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+              fill="currentColor"/>
+      </svg>
+      <p>Cookie Guardian is <strong>disabled</strong>.<br/>Toggle the switch above to re-enable.</p>
+    </div>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────── -->
+  <footer class="footer">
+    <span>Cookie Guardian v1.0 <span class="beta-badge">BETA</span></span>
+    <span class="footer-dot">·</span>
+    <span>MV3 · Edge / Chrome</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
