@@ -68,6 +68,11 @@
   const observedShadowRoots = new WeakSet();
   const activeObservers     = new Set();
 
+  // ── First-visit confirmation gate ────────────────────────────────────────
+  // Resolved once per page load so the user is only asked once even when
+  // safeClick is called multiple times (e.g. manage → reject two-step flows).
+  let _domainApprovalPromise = null;
+
   // ── Reload-loop guard ────────────────────────────────────────────────────
   // Persists click count across page reloads (within the same tab session)
   // to detect when our clicks cause navigation/reloads → infinite loop.
@@ -1354,6 +1359,151 @@
     ).replace(/\s+/g, ' ').trim();
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // §5b  First-visit confirmation helpers
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const TRUSTED_DOMAINS_KEY = 'cg_trusted_domains';
+
+  function getTrustedDomains() {
+    return new Promise(resolve => {
+      chrome.storage.local.get({ [TRUSTED_DOMAINS_KEY]: [] }, result => {
+        resolve(new Set(result[TRUSTED_DOMAINS_KEY]));
+      });
+    });
+  }
+
+  function trustDomain(hostname) {
+    return new Promise(resolve => {
+      chrome.storage.local.get({ [TRUSTED_DOMAINS_KEY]: [] }, result => {
+        const set = new Set(result[TRUSTED_DOMAINS_KEY]);
+        set.add(hostname);
+        chrome.storage.local.set({ [TRUSTED_DOMAINS_KEY]: [...set] }, resolve);
+      });
+    });
+  }
+
+  /**
+   * Non-blocking countdown toast: auto-proceeds after `seconds` seconds.
+   * The user only needs to act to *cancel* — zero friction on legitimate sites.
+   * Returns a Promise<'proceed'|'always'|'skip'>.
+   *   'proceed' — countdown expired, go ahead (domain not saved)
+   *   'always'  — user clicked "Always trust", save domain and go ahead
+   *   'skip'    — user cancelled, do not click
+   */
+  function showCountdownToast(hostname, seconds = 4) {
+    return new Promise(resolve => {
+      const host = document.createElement('div');
+      const sr   = host.attachShadow({ mode: 'open' });
+
+      const style       = document.createElement('style');
+      style.textContent = `
+        .cg-toast {
+          position: fixed; bottom: 20px; right: 20px;
+          background: #1e2235; color: #e8eaf0;
+          border: 1px solid #3a3f5c; border-radius: 12px;
+          padding: 14px 16px; z-index: 2147483647;
+          font: 13px/1.5 system-ui, -apple-system, sans-serif;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+          max-width: 300px; min-width: 240px;
+        }
+        .cg-header  { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .cg-title   { font-weight: 700; font-size: 13px; color: #7eb8f7; }
+        .cg-host    { font-size: 11px; color: #888; margin-bottom: 6px; word-break: break-all; }
+        .cg-body    { font-size: 12px; color: #c5c9d8; margin-bottom: 10px; }
+        .cg-bar-bg  {
+          height: 3px; background: #2a2f48; border-radius: 2px; margin-bottom: 10px; overflow: hidden;
+        }
+        .cg-bar     {
+          height: 100%; background: #2d6cf4; border-radius: 2px;
+          width: 100%;
+          transition: width 1s linear;
+        }
+        .cg-btns    { display: flex; gap: 6px; }
+        button {
+          border: none; border-radius: 7px; padding: 5px 12px;
+          font: 12px/1.5 system-ui, sans-serif; cursor: pointer;
+          transition: filter 0.15s;
+        }
+        button:hover { filter: brightness(1.15); }
+        .cg-always { background: #2d6cf4; color: #fff; font-weight: 600; }
+        .cg-skip   { background: transparent; color: #888; border: 1px solid #444; }
+      `;
+
+      const toast     = document.createElement('div');
+      toast.className = 'cg-toast';
+      toast.innerHTML = `
+        <div class="cg-header"><span>\u{1F36A}</span><span class="cg-title">Cookie Guardian</span></div>
+        <div class="cg-host">${hostname}</div>
+        <div class="cg-body">Cookie banner detected — handling in <b class="cg-count">${seconds}</b>s</div>
+        <div class="cg-bar-bg"><div class="cg-bar"></div></div>
+        <div class="cg-btns">
+          <button class="cg-always">Always trust</button>
+          <button class="cg-skip">Cancel</button>
+        </div>
+      `;
+
+      sr.appendChild(style);
+      sr.appendChild(toast);
+      document.body.appendChild(host);
+
+      const cleanup   = () => { try { document.body.removeChild(host); } catch (_) {} };
+      const countEl   = sr.querySelector('.cg-count');
+      const bar       = sr.querySelector('.cg-bar');
+      let remaining   = seconds;
+
+      // Two nested rAFs: the outer one lets the browser paint the initial
+      // width:100% state; the inner one then triggers the transition to 0%.
+      // A single rAF collapses both writes into one frame, killing the animation.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          bar.style.transition = `width ${seconds}s linear`;
+          bar.style.width      = '0%';
+        });
+      });
+
+      const ticker = setInterval(() => {
+        remaining--;
+        if (countEl) countEl.textContent = remaining;
+        if (remaining <= 0) {
+          clearInterval(ticker);
+          cleanup();
+          resolve('proceed');
+        }
+      }, 1000);
+
+      sr.querySelector('.cg-always').addEventListener('click', () => {
+        clearInterval(ticker); cleanup(); resolve('always');
+      });
+      sr.querySelector('.cg-skip').addEventListener('click', () => {
+        clearInterval(ticker); cleanup(); resolve('skip');
+      });
+    });
+  }
+
+  /**
+   * Memoised per page-load: resolves true (proceed) or false (skip).
+   * Used only by the generic heuristic path — CMP Dictionary matches bypass
+   * this entirely, so there is zero friction on known CMP platforms.
+   *
+   * If firstVisitConfirm is off, or the hostname is already trusted, resolves
+   * immediately (no toast shown). Otherwise shows a self-dismissing countdown
+   * toast; the user only needs to act if they want to *cancel*.
+   */
+  function getApproval() {
+    if (!_domainApprovalPromise) {
+      _domainApprovalPromise = (async () => {
+        if (!settings.firstVisitConfirm) return true;
+        const trusted = await getTrustedDomains();
+        if (trusted.has(location.hostname)) return true;
+        const answer = await showCountdownToast(location.hostname);
+        if (answer === 'always') await trustDomain(location.hostname);
+        return answer !== 'skip';   // 'proceed' and 'always' both mean go ahead
+      })();
+    }
+    return _domainApprovalPromise;
+  }
+
   /**
    * Fire the full synthetic event chain so React/Vue/Angular listeners fire.
    *
@@ -1363,7 +1513,7 @@
    *   B) Any click that causes a page reload — tracked via sessionStorage so
    *      the next page load can detect the loop and stand down.
    */
-  function safeClick(el) {
+  async function safeClick(el) {
     if (!el) return false;
     if (!isVisible(el)) {
       log('Not visible — skip:', el.tagName, el.id || getLabel(el).slice(0, 40));
@@ -1636,7 +1786,7 @@
     const btn = queryFirst(primary, document, sr);
     if (btn) {
       log(`${profile.name}: direct → "${getLabel(btn)}"`);
-      return safeClick(btn);
+      return await safeClick(btn);
     }
 
     // ── Two-step: open manage/preferences → then reject ──────────────────
@@ -1651,7 +1801,7 @@
         if (manageBtn) {
           log(`${profile.name}: opening manage panel…`);
           _managedClickedKeys.add(manageGuardKey);
-          safeClick(manageBtn);
+          await safeClick(manageBtn);
           await delay(profile.postClick ?? 800);
         }
       }
@@ -1660,7 +1810,7 @@
       const reject = queryFirst(profile.reject, document, newSr ?? sr);
       if (reject) {
         log(`${profile.name}: panel reject → "${getLabel(reject)}"`);
-        safeClick(reject);
+        await safeClick(reject);
         // Second pass: some CMPs show a confirmation/secondary panel after the
         // first reject click (e.g. TrustArc on Audible/EA, Danske Bank).
         // Wait briefly then look for another actionable reject target.
@@ -1668,12 +1818,12 @@
         const confirm = queryFirst(profile.reject, document, newSr ?? sr);
         if (confirm && confirm !== reject && isVisible(confirm)) {
           log(`${profile.name}: secondary confirmation → "${getLabel(confirm)}"`);
-          safeClick(confirm);
+          await safeClick(confirm);
         } else {
           const hConfirm = findByHeuristic('reject', newSr ?? sr ?? document);
           if (hConfirm && hConfirm !== reject && isVisible(hConfirm)) {
             log(`${profile.name}: secondary heuristic confirm → "${getLabel(hConfirm)}"`);
-            safeClick(hConfirm);
+            await safeClick(hConfirm);
           }
         }
         return true;
@@ -1682,7 +1832,7 @@
       // Heuristic inside the panel
       const h = findByHeuristic('reject', newSr ?? sr ?? document);
       if (h) {
-        safeClick(h);
+        await safeClick(h);
         // After clicking a heuristic element (e.g. a per-category radio button),
         // wait briefly then look for a higher-priority reject or a finalize button
         // so the panel is properly dismissed (e.g. Didomi "Tout refuser" / "Enregistrer").
@@ -1690,12 +1840,12 @@
         const h2 = findByHeuristic('reject', newSr ?? sr ?? document);
         if (h2 && h2 !== h && isVisible(h2)) {
           log(`${profile.name}: secondary heuristic panel → "${getLabel(h2)}"`);
-          safeClick(h2);
+          await safeClick(h2);
         } else if (profile.manageFinalize) {
           const finalizeBtn = queryFirst(profile.manageFinalize, document, newSr ?? sr);
           if (finalizeBtn && finalizeBtn !== h && isVisible(finalizeBtn)) {
             log(`${profile.name}: heuristic finalize panel → "${getLabel(finalizeBtn)}"`);
-            safeClick(finalizeBtn);
+            await safeClick(finalizeBtn);
           }
         }
         return true;
@@ -1708,7 +1858,7 @@
         const finalizeBtn = queryFirst(profile.manageFinalize, document, newSr ?? sr);
         if (finalizeBtn) {
           log(`${profile.name}: finalize panel → "${getLabel(finalizeBtn)}"`);
-          safeClick(finalizeBtn);
+          await safeClick(finalizeBtn);
           return true;
         }
       }
@@ -1725,12 +1875,12 @@
     }, null);
     if (containerEl) {
       const h = findByHeuristic(want, containerEl);
-      if (h) return safeClick(h);
+      if (h) return await safeClick(h);
 
       // Scan iframes within the container (Sourcepoint renders inside iframes)
       if (profile.scanIframe) {
         const iframeBtn = await scanContainerIframes(containerEl, want, profile);
-        if (iframeBtn) return safeClick(iframeBtn);
+        if (iframeBtn) return await safeClick(iframeBtn);
       }
     }
 
@@ -1890,12 +2040,21 @@
     }
 
     log('Generic: root =', bannerRoot.tagName, bannerRoot.id || '');
+
+    // First-visit confirmation gate — only on the heuristic path.
+    // CMP Dictionary matches (handleProfile) never reach this check, so known
+    // platforms (OneTrust, Cookiebot, etc.) are always handled without friction.
+    if (!await getApproval()) {
+      log('First-visit confirmation: user cancelled — leaving banner untouched');
+      return false;
+    }
+
     const el = findByHeuristic(settings.preference, bannerRoot);
-    if (el) return safeClick(el);
+    if (el) return await safeClick(el);
 
     // Also scan iframes as last resort
     const iframeEl = await scanIframes(settings.preference);
-    if (iframeEl) return safeClick(iframeEl);
+    if (iframeEl) return await safeClick(iframeEl);
 
     return false;
   }
@@ -2071,7 +2230,7 @@
   async function loadSettings() {
     return new Promise(resolve => {
       chrome.storage.sync.get(
-        { preference: 'moderate', enabled: true, showNotifications: true, debugMode: false },
+        { preference: 'moderate', enabled: true, showNotifications: true, debugMode: false, firstVisitConfirm: false },
         stored => { Object.assign(settings, stored); resolve(); }
       );
     });
@@ -2085,10 +2244,11 @@
     log('Settings updated live:', settings);
     if (settings.enabled && (wasDisabled || handled)) {
       // Re-arm: allow the extension to act again on this tab
-      handled               = false;
-      retryCount            = 0;
+      handled                = false;
+      retryCount             = 0;
       moderateRejectAttempts = 0;   // reset moderate-reject counter
       moderateFallingBack    = false;
+      _domainApprovalPromise = null; // re-evaluate trust on next click attempt
       clearSessionGuard();           // allow fresh attempts after user action
       attemptHandle();
     }

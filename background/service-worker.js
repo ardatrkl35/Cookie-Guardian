@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   enabled:           true,       // master on/off toggle
   showNotifications: true,       // flash badge when banner is handled
   debugMode:         false,      // verbose logs to DevTools console
+  firstVisitConfirm: false,      // ask user before auto-clicking on unknown sites
 };
 
 // ── On install: write defaults if nothing is stored yet ──────────────────────
@@ -45,18 +46,18 @@ function sendToTab(tabId, payload) {
   }
 }
 
-// ── Helper: load base icon as ImageBitmap (cached) ───────────────────────────
+// ── Helper: load base icon as ImageBitmap (cached per service-worker lifetime) ─
 var _baseBitmapPromise = null;
 function getBaseBitmap() {
   if (!_baseBitmapPromise) {
-    _baseBitmapPromise = fetch(chrome.runtime.getURL('icons/base128.png'))
+    _baseBitmapPromise = fetch(chrome.runtime.getURL('icons/icon128.png'))
       .then(function (res) { return res.blob(); })
       .then(function (blob) { return createImageBitmap(blob); });
   }
   return _baseBitmapPromise;
 }
 
-// ── Helper: draw base icon with 🔥 overlay, revert after 2 s ─────────────────
+// ── Helper: draw base icon with ✅ overlay, revert after 2 s ──────────────────
 function drawOverlayIcon(tabId) {
   var SIZE = 128;
 
@@ -75,8 +76,7 @@ function drawOverlayIcon(tabId) {
     ctx.font = '110px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#000000';
-    ctx.fillText('\uD83D\uDD25', SIZE / 2, SIZE / 2 + 4);
+    ctx.fillText('\u2705', SIZE / 2, SIZE / 2 + 4);
 
     var overlayData = ctx.getImageData(0, 0, SIZE, SIZE);
 
@@ -125,12 +125,16 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     return true; // keep channel open
   }
 
-  // ── BANNER_HANDLED: overlay 🔥 on the icon for the originating tab ────────
+  // ── BANNER_HANDLED: overlay ✅ on the icon for the originating tab ─────────
   if (message.type === 'BANNER_HANDLED') {
     var tabId = sender && sender.tab ? sender.tab.id : null;
 
     if (tabId) {
-      drawOverlayIcon(tabId);
+      chrome.storage.sync.get({ showNotifications: true }, function (prefs) {
+        if (prefs.showNotifications) {
+          drawOverlayIcon(tabId);
+        }
+      });
     }
 
     sendResponse({ ok: true });

@@ -32,7 +32,8 @@ Three modes to choose from:
 - **21-language heuristics** — English, Turkish, German, French, Spanish, Italian, Dutch, Portuguese, Polish, Swedish, Norwegian, Danish, Finnish, Czech, Slovak, Greek, Romanian, Hungarian, Japanese, Korean, Chinese
 - **Reload-loop guard** — detects when clicks cause page reloads and automatically stands down
 - **Live settings sync** — changes in the popup take effect instantly without a page reload
-- **Activity badge** — optional toolbar icon animation when a banner is handled
+- **Activity badge** — optional ✅ overlay on the toolbar icon when a banner is handled
+- **Confirm on new sites** — optional countdown toast before auto-clicking on sites not yet in your trusted list; auto-proceeds after 4 seconds so there is no friction on legitimate sites
 - **Debug mode** — verbose DevTools console logging for troubleshooting
 - **Zero data collection** — nothing leaves your device, ever
 
@@ -109,10 +110,15 @@ Search for **Cookie Guardian** in the [Edge Add-ons Store](https://microsoftedge
    - **Reject All** — recommended for maximum privacy
    - **Moderate Reject** — best balance of privacy and compatibility
    - **Accept All** — useful if certain sites break without full cookie acceptance
-3. Toggle optional settings (activity badge, debug logging).
+3. Toggle optional settings:
+   - **Show activity badge** — flash a ✅ badge when a banner is handled
+   - **Confirm on new sites** — show a brief countdown toast on sites not yet trusted; auto-proceeds after 4 seconds, giving you time to cancel if something looks off
+   - **Debug logging** — output detailed logs to the DevTools console
 4. Click **Save Settings**.
 
 Your preference applies immediately to the current tab and to all future pages you visit.
+
+> **Tip:** "Confirm on new sites" is off by default. When enabled, known CMP platforms (OneTrust, Cookiebot, etc.) are always handled silently — the countdown only appears for banners detected by the heuristic fallback on sites that do not use a recognised CMP.
 
 ---
 
@@ -163,11 +169,12 @@ cookie-guardian/
 On each page:
 1. The **content script** loads your saved preferences from `chrome.storage.sync`.
 2. It immediately scans the DOM for known CMP containers.
-3. If a known CMP is found, it uses its precise selectors to click the correct button.
+3. If a known CMP is found, it uses its precise selectors to click the correct button — always silently, with no confirmation prompt.
 4. If no known CMP matches, a **multilingual heuristic scorer** scans all clickable elements using regex pattern banks across 21 languages.
-5. A **MutationObserver** watches for banners injected after page load (async loaders, SPAs).
-6. A **polling fallback** runs every 500 ms for up to 40 seconds as a belt-and-suspenders layer.
-7. When a banner is handled, the service worker briefly animates the toolbar icon.
+5. If "Confirm on new sites" is enabled and the site is not yet trusted, a **countdown toast** appears for 4 seconds before the click. The user can cancel, always-trust, or simply do nothing and let it proceed automatically.
+6. A **MutationObserver** watches for banners injected after page load (async loaders, SPAs).
+7. A **polling fallback** runs every 500 ms for up to 40 seconds as a belt-and-suspenders layer.
+8. When a banner is handled, the service worker briefly animates the toolbar icon.
 
 ---
 
@@ -177,7 +184,8 @@ Cookie Guardian collects **no personal data whatsoever.**
 
 - All processing is local to your device.
 - No browsing data, page content, or usage analytics are ever transmitted.
-- Your 4 preference settings are stored via `chrome.storage.sync` (your own browser's sync, between your own devices).
+- Your preference settings are stored via `chrome.storage.sync` (your own browser's sync, between your own devices).
+- If "Confirm on new sites" is enabled, the list of hostnames you have marked as "Always trust" is stored locally via `chrome.storage.local` and never synced or transmitted.
 - No third-party SDKs, analytics, or tracking of any kind are included.
 
 See [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) for the full policy.

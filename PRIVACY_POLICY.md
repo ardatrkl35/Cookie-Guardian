@@ -29,7 +29,9 @@ The following table describes every piece of information the extension interacts
 | Master enable/disable toggle state | You, via the popup | Turns the extension on or off | **No** |
 | "Show activity badge" toggle state | You, via the popup | Controls toolbar icon feedback | **No** |
 | "Debug logging" toggle state | You, via the popup | Enables verbose console logs in DevTools | **No** |
-| Current page hostname (e.g. `example.com`) | Your browser's current tab | Used internally to detect reload loops on a per-site basis | **No** |
+| "Confirm on new sites" toggle state | You, via the popup | Controls whether a countdown toast appears before auto-clicking on unrecognised sites | **No** |
+| Trusted-site hostname list (e.g. `example.com`) | You, when you click "Always trust" in the countdown toast | Remembers which sites you have permanently approved so the toast is not shown again | **No** — stored only in `chrome.storage.local` on your device; never synced or transmitted |
+| Current page hostname (e.g. `example.com`) | Your browser's current tab | Used internally to detect reload loops and to check whether the site is in your trusted list | **No** |
 | Click counter per hostname | Computed in-memory / `sessionStorage` | Prevents the extension from entering an infinite click-reload loop | **No** — `sessionStorage` is local to the browser tab and is cleared when the tab is closed |
 | Page DOM structure | The website you are visiting | Scanned locally to detect and interact with cookie consent banners | **No** — read-only, never stored or transmitted |
 | Page body text | The website you are visiting | Used to confirm a consent-related phrase is present before acting | **No** — read-only, never stored or transmitted |
@@ -49,7 +51,11 @@ The following table describes every piece of information the extension interacts
 
 ## 3. How Settings Are Stored
 
-Your four preference values (`preference`, `enabled`, `showNotifications`, `debugMode`) are saved using the browser's built-in **`chrome.storage.sync`** API. This API stores data locally in your browser profile and, if you are signed into Microsoft Edge or Google Chrome with sync enabled, your preferences may be synchronised across your own signed-in devices via the browser vendor's secure sync infrastructure (Microsoft or Google). This synchronisation is handled entirely by the browser and is governed by the respective vendor's privacy policy — Cookie Guardian has no visibility into or control over this process.
+Cookie Guardian uses two browser storage APIs, both entirely local to your device:
+
+**`chrome.storage.sync`** — stores your five preference values: `preference`, `enabled`, `showNotifications`, `debugMode`, and `firstVisitConfirm`. If you are signed into Microsoft Edge or Google Chrome with sync enabled, these preferences may be synchronised across your own signed-in devices via the browser vendor's secure sync infrastructure (Microsoft or Google). This synchronisation is handled entirely by the browser and is governed by the respective vendor's privacy policy — Cookie Guardian has no visibility into or control over this process.
+
+**`chrome.storage.local`** — stores the list of hostnames you have marked as "Always trust" via the "Confirm on new sites" countdown toast (e.g. `example.com`). This list is stored only on the current device and is **never** synchronised, transmitted, or shared. It is only written when you explicitly click "Always trust" and is only read to skip showing the countdown toast on sites you have previously approved. If "Confirm on new sites" is disabled or you have never clicked "Always trust", this list remains empty.
 
 ---
 
@@ -61,7 +67,7 @@ The following permissions are declared in `manifest.json`. Each one is required 
 **Why it is needed:** When you save new settings in the popup, the extension needs to identify the currently active browser tab so it can immediately relay the updated settings to the content script running on that page. Without this permission, your preference changes would not take effect until the next page load.
 
 ### `storage`
-**Why it is needed:** Required to read and write your four preference settings (`preference`, `enabled`, `showNotifications`, `debugMode`) via `chrome.storage.sync`. This is the only persistent data the extension stores and it never leaves your device through the extension itself.
+**Why it is needed:** Required to read and write preference settings via `chrome.storage.sync` (`preference`, `enabled`, `showNotifications`, `debugMode`, `firstVisitConfirm`) and to read and write the trusted-site hostname list via `chrome.storage.local`. This is the only persistent data the extension stores and it never leaves your device through the extension itself.
 
 ### `scripting`
 **Why it is needed:** Required by Manifest V3 to support programmatic interaction with web page content. This permission enables the extension's content script framework to operate correctly across all supported page contexts, including those that require dynamic script injection at the browser engine level.
@@ -92,7 +98,7 @@ Cookie Guardian does not share, sell, rent, trade, or otherwise disclose any use
 
 ## 7. Data Security
 
-Because Cookie Guardian stores only four boolean/string preference values locally on your device and transmits nothing externally, the security surface area is minimal by design. Your preferences are stored using the browser's native, sandboxed `chrome.storage.sync` mechanism, which is protected by the browser's own security model and, where applicable, your browser account credentials.
+Because Cookie Guardian stores only a small number of preference values and an optional trusted-site hostname list locally on your device, and transmits nothing externally, the security surface area is minimal by design. Preference settings are stored using the browser's native, sandboxed `chrome.storage.sync` mechanism, and the trusted-site list is stored via `chrome.storage.local` — both are protected by the browser's own security model and, where applicable, your browser account credentials. Neither storage location is accessible to web pages or other extensions.
 
 ---
 
@@ -114,7 +120,8 @@ If you are located in the European Economic Area (EEA), the United Kingdom, or a
 
 To remove all data stored by the extension:
 1. Open the extension popup and toggle the settings as desired, or
-2. Uninstall Cookie Guardian — this will remove all locally stored preferences.
+2. To clear the trusted-site list specifically, open the browser's DevTools on any page, open the **Application** tab, navigate to **Extension Storage → Local**, find the `cg_trusted_domains` key, and delete it, or
+3. Uninstall Cookie Guardian — this will remove all locally stored preferences and the trusted-site list.
 
 ---
 

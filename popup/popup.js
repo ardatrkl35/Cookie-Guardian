@@ -13,6 +13,7 @@ const els = {
   radios:            document.querySelectorAll('input[name="preference"]'),
   showNotifications: $('#showNotifications'),
   debugMode:         $('#debugMode'),
+  firstVisitConfirm: $('#firstVisitConfirm'),
   saveBtn:           $('#saveBtn'),
   saveBtnText:       $('#saveBtn .save-btn-text'),
   toast:             $('#toast'),
@@ -32,11 +33,13 @@ async function loadSettings() {
     enabled:           true,
     showNotifications: true,
     debugMode:         false,
+    firstVisitConfirm: false,
   });
 
   els.masterToggle.checked      = settings.enabled;
   els.showNotifications.checked = settings.showNotifications;
   els.debugMode.checked         = settings.debugMode;
+  els.firstVisitConfirm.checked = settings.firstVisitConfirm;
 
   // Select the correct radio
   els.radios.forEach((r) => {
@@ -71,6 +74,7 @@ els.saveBtn.addEventListener('click', async () => {
     enabled:           els.masterToggle.checked,
     showNotifications: els.showNotifications.checked,
     debugMode:         els.debugMode.checked,
+    firstVisitConfirm: els.firstVisitConfirm.checked,
   };
 
   try {
@@ -103,6 +107,12 @@ function showToast(msg, type = 'success') {
     toast.classList.remove('toast--visible');
   }, 2500);
 }
+
+// ── Footer link — open GitHub repo in a new tab ───────────────────────────────
+document.querySelector('.footer-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: e.currentTarget.href });
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadSettings();

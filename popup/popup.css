@@ -465,6 +465,14 @@ body {
 
 .footer-dot { color: var(--border-focus); }
 
+.footer-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.footer-link:hover { color: var(--accent); }
+
 /* ── Beta Badge ────────────────────────────────────────────────────────── */
 .beta-badge {
   display: inline-block;
