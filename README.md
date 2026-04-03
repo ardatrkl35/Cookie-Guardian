@@ -2,7 +2,7 @@
 
 > Automatically detects and dismisses cookie consent banners based on your preferred settings — silently, instantly, on every website you visit.
 
-![Version](https://img.shields.io/badge/version-1.0_BETA-blue)
+![Version](https://img.shields.io/badge/version-1.1.0_BETA-blue)
 ![Manifest](https://img.shields.io/badge/manifest-v3-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Edge_%2F_Chrome-0078D4)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -31,11 +31,32 @@ Three modes to choose from:
 - **Same-origin iframe scanning** — catches banners loaded inside frames (Termly, Cookiebot hosted)
 - **21-language heuristics** — English, Turkish, German, French, Spanish, Italian, Dutch, Portuguese, Polish, Swedish, Norwegian, Danish, Finnish, Czech, Slovak, Greek, Romanian, Hungarian, Japanese, Korean, Chinese
 - **Reload-loop guard** — detects when clicks cause page reloads and automatically stands down
-- **Live settings sync** — changes in the popup take effect instantly without a page reload
+- **Instant enable/disable** — the master toggle in the header saves immediately and takes effect without a page reload; turning it off halts all active DOM monitoring on the tab
+- **Auto-save** — default preference and option toggles persist shortly after you change them (no separate Save button)
+- **Dark mode** — optional dark appearance for the extension popup only (stored locally, not synced)
+- **Site whitelist** — add the current site or type a domain to **never** run Cookie Guardian on those hostnames; manage the list in the collapsible **Whitelisted Sites** section. In **InPrivate** windows, a separate list applies (badge in the section title); it is cleared when the last InPrivate window closes
+- **Live settings sync** — changes relay to the active tab’s content script immediately
 - **Activity badge** — optional ✅ overlay on the toolbar icon when a banner is handled
-- **Confirm on new sites** — optional countdown toast before auto-clicking on sites not yet in your trusted list; auto-proceeds after 4 seconds so there is no friction on legitimate sites
+- **Confirm on new sites** — optional countdown toast before auto-clicking when the site is matched only by heuristics (not a known CMP); auto-proceeds after 4 seconds. **Always trust** on the toast remembers that hostname so the prompt is not shown again (separate from the whitelist)
 - **Debug mode** — verbose DevTools console logging for troubleshooting
+- **Report broken site** — one-click button to open a pre-filled GitHub issue for any site where the extension misbehaves; rate-limited locally (1 report per hostname per 24 h, max 5 per day) to deter abuse
 - **Zero data collection** — nothing leaves your device, ever
+
+---
+
+## All settings (popup)
+
+| Setting | What it does | Storage |
+|---|---|---|
+| **Enable / Disable** (header toggle) | Master switch; when off, the main area is dimmed and the extension does not scan or click on the page | `chrome.storage.sync` |
+| **Reject All / Moderate Reject / Accept All** | Default action when dismissing banners | `chrome.storage.sync` |
+| **Dark mode** | Light or dark popup theme | `chrome.storage.local` |
+| **Show activity badge** | Brief ✅ on the toolbar icon after a banner is handled | `chrome.storage.sync` |
+| **Confirm on new sites** | Countdown toast on heuristic-only matches; known CMPs stay silent | `chrome.storage.sync` |
+| **Whitelist current site** | Add or remove the active tab’s hostname from the whitelist | `chrome.storage.local` |
+| **Whitelisted Sites** | Expandable list: type a domain and add, or remove entries — these sites are skipped entirely by the extension | `chrome.storage.local` (separate key in InPrivate) |
+| **Debug logging** | Extra `[CookieGuardian]` messages in the page console | `chrome.storage.sync` |
+| **Report broken site** | Opens GitHub with hostname + version pre-filled (subject to rate limits) | Rate-limit map in `chrome.storage.local` |
 
 ---
 
@@ -82,8 +103,9 @@ Three modes to choose from:
 
 ## Installation
 
-### From the Microsoft Edge Add-ons Store *(coming soon)*
-Search for **Cookie Guardian** in the [Edge Add-ons Store](https://microsoftedge.microsoft.com/addons/) and click **Get**.
+### From the Microsoft Edge Add-ons Store
+
+Install **[Cookie Guardian from the Edge Add-ons Store](https://microsoftedge.microsoft.com/addons/detail/cookie-guardian/hjjpapclkmjdndigcafkcmadkcjfmclj)** and click **Get**.
 
 ### Manual Installation (Developer Mode)
 
@@ -106,19 +128,37 @@ Search for **Cookie Guardian** in the [Edge Add-ons Store](https://microsoftedge
 ## Usage
 
 1. Click the **Cookie Guardian** icon in your browser toolbar.
-2. Select your preferred mode:
-   - **Reject All** — recommended for maximum privacy
-   - **Moderate Reject** — best balance of privacy and compatibility
-   - **Accept All** — useful if certain sites break without full cookie acceptance
-3. Toggle optional settings:
-   - **Show activity badge** — flash a ✅ badge when a banner is handled
-   - **Confirm on new sites** — show a brief countdown toast on sites not yet trusted; auto-proceeds after 4 seconds, giving you time to cancel if something looks off
-   - **Debug logging** — output detailed logs to the DevTools console
-4. Click **Save Settings**.
+2. Use the **header toggle** to enable or disable the extension — it saves and applies immediately.
+3. Under **Default Preference**, choose **Reject All**, **Moderate Reject**, or **Accept All**. Your choice is saved automatically after a short moment.
+4. Under **Options**:
+   - **Dark mode** — dark theme for the popup only
+   - **Show activity badge** — flash a ✅ when a banner is handled
+   - **Confirm on new sites** — countdown toast for sites matched only by heuristics; use **Always trust** on the toast to skip future prompts for that hostname (this is not the same as whitelisting)
+   - **Whitelist current site** — **Add** / **Remove** the active site so Cookie Guardian never runs there
+   - **Debug logging** — detailed logs in the DevTools console for the page
+5. Expand **Whitelisted Sites** to add domains manually or remove whitelisted entries. In InPrivate, the badge shows which list you are editing; that list is discarded when you close all InPrivate windows.
 
-Your preference applies immediately to the current tab and to all future pages you visit.
+> **Tip:** With **Confirm on new sites** enabled, recognised CMP platforms (OneTrust, Cookiebot, etc.) are handled silently — the countdown appears for banners caught only by the heuristic fallback.
 
-> **Tip:** "Confirm on new sites" is off by default. When enabled, known CMP platforms (OneTrust, Cookiebot, etc.) are always handled silently — the countdown only appears for banners detected by the heuristic fallback on sites that do not use a recognised CMP.
+---
+
+## Whitelist vs “Always trust”
+
+- **Whitelist** — Cookie Guardian does **nothing** on that hostname (no scanning, no clicks). Managed in the popup.
+- **Always trust** (on the countdown toast) — only skips the confirmation toast for that hostname; the extension still dismisses banners as usual when **Confirm on new sites** is on.
+
+---
+
+## Reporting a Broken Site
+
+If Cookie Guardian fails to dismiss a banner, misbehaves, or causes issues on a specific site, click the **Report broken site** button in the popup. This opens a pre-filled GitHub issue in a new tab containing the site's hostname and your extension version — no full URLs, paths, or personal data are ever included.
+
+Reporting requires a GitHub account, which acts as a natural barrier against spam. Additionally, rate limiting is enforced locally:
+
+- Maximum **1 report per hostname per 24 hours**
+- Maximum **5 unique hostnames reported per 24-hour window**
+
+These limits are stored on your device only and reset automatically after 24 hours.
 
 ---
 
@@ -133,10 +173,10 @@ cookie-guardian/
 │   └── icon128.png            # Store listing icon (128×128)
 ├── popup/
 │   ├── popup.html             # Toolbar popup markup
-│   ├── popup.css              # Popup styles (dark theme)
-│   └── popup.js               # Popup logic — loads/saves settings
+│   ├── popup.css              # Popup styles (light + dark)
+│   └── popup.js               # Popup logic — settings, whitelist, report button
 ├── background/
-│   └── service-worker.js      # MV3 service worker — install defaults, message routing, icon overlay
+│   └── service-worker.js      # MV3 service worker — install defaults, message routing, icon overlay, InPrivate whitelist cleanup
 ├── content/
 │   └── content.js             # Content script — CMP detection, DOM interaction, heuristics
 ├── PRIVACY_POLICY.md          # Full privacy policy
@@ -148,33 +188,41 @@ cookie-guardian/
 ## How It Works
 
 ```
- ┌──────────────┐   Save Settings   ┌────────────────────┐
- │  Popup UI    │ ───────────────►  │  chrome.storage    │
- │  popup.js    │                   │  .sync             │
- └──────────────┘                   └────────────────────┘
-        │ sendMessage                        │ get()
-        ▼                                    ▼
- ┌──────────────────┐             ┌──────────────────────┐
- │ Service Worker   │             │   Content Script     │
- │ service-worker   │ ──relay──►  │   content.js         │
- │ .js              │             │                      │
- └──────────────────┘             │  1. Load settings    │
-                                  │  2. Watch DOM (MutationObserver) │
-                                  │  3. Match CMP profile │
-                                  │  4. Pierce Shadow DOM │
-                                  │  5. Click button     │
+ ┌──────────────┐  Toggle / options ┌────────────────────┐
+ │  Popup UI    │ ─────────────────► │  chrome.storage    │
+ │  popup.js    │  (auto-save)       │  .sync + .local    │
+ │              │                    └────────────────────┘
+ │              │                           │ get()
+ │              │                           ▼
+ └──────┬───────┘                  ┌──────────────────────┐
+        │ sendMessage              │   Content Script     │
+        ▼                          │   content.js         │
+ ┌──────────────────┐              │                      │
+ │ Service Worker   │              │  1. Load settings    │
+ │ service-worker   │─relay───────►│  2. Skip if disabled │
+ │ .js              │              │     or whitelisted   │
+ └──────────────────┘              │  3. Watch DOM        │
+                                  │     (MutationObserver│
+                                  │      + polling)      │
+                                  │  4. Match CMP profile│
+                                  │  5. Pierce Shadow DOM│
+                                  │  6. Confirm toast    │
+                                  │     (heuristic path) │
+                                  │  7. Click button     │
                                   └──────────────────────┘
 ```
 
 On each page:
-1. The **content script** loads your saved preferences from `chrome.storage.sync`.
-2. It immediately scans the DOM for known CMP containers.
-3. If a known CMP is found, it uses its precise selectors to click the correct button — always silently, with no confirmation prompt.
-4. If no known CMP matches, a **multilingual heuristic scorer** scans all clickable elements using regex pattern banks across 21 languages.
-5. If "Confirm on new sites" is enabled and the site is not yet trusted, a **countdown toast** appears for 4 seconds before the click. The user can cancel, always-trust, or simply do nothing and let it proceed automatically.
-6. A **MutationObserver** watches for banners injected after page load (async loaders, SPAs).
-7. A **polling fallback** runs every 500 ms for up to 40 seconds as a belt-and-suspenders layer.
-8. When a banner is handled, the service worker briefly animates the toolbar icon.
+1. The **content script** loads your saved preferences from `chrome.storage.sync` and checks whitelist / InPrivate context in `chrome.storage.local`.
+2. If the hostname is **whitelisted**, the extension exits and does not monitor the page.
+3. Otherwise it scans the DOM for known CMP containers.
+4. If a known CMP is found, it uses precise selectors to click the correct button — silently, with no confirmation prompt.
+5. If no known CMP matches, a **multilingual heuristic scorer** scans clickable elements using regex pattern banks across 21 languages.
+6. If **Confirm on new sites** is enabled and the hostname is not in the always-trusted list, a **countdown toast** appears for 4 seconds before the heuristic click. You can **Cancel**, **Always trust**, or wait for auto-proceed.
+7. A **MutationObserver** watches for banners injected after page load (async loaders, SPAs).
+8. A **polling fallback** runs every 500 ms for up to 40 seconds as a belt-and-suspenders layer.
+9. When a banner is handled, the service worker briefly animates the toolbar icon (if the activity badge option is on).
+10. If the master toggle is turned **off**, the content script stops observers and polling until re-enabled.
 
 ---
 
@@ -184,8 +232,9 @@ Cookie Guardian collects **no personal data whatsoever.**
 
 - All processing is local to your device.
 - No browsing data, page content, or usage analytics are ever transmitted.
-- Your preference settings are stored via `chrome.storage.sync` (your own browser's sync, between your own devices).
-- If "Confirm on new sites" is enabled, the list of hostnames you have marked as "Always trust" is stored locally via `chrome.storage.local` and never synced or transmitted.
+- Core preferences use `chrome.storage.sync` (optional browser sync between your own devices).
+- Popup **Dark mode** and all hostname lists (`whitelist`, always-trusted, InPrivate whitelist) use `chrome.storage.local` and are not uploaded by the extension.
+- **Report broken site** only puts the **hostname** in the pre-filled issue. A local rate-limit record is never transmitted.
 - No third-party SDKs, analytics, or tracking of any kind are included.
 
 See [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) for the full policy.
@@ -196,11 +245,11 @@ See [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) for the full policy.
 
 | Permission | Reason |
 |---|---|
-| `activeTab` | Identify the current tab to relay updated settings immediately after you save |
-| `storage` | Save and read your preference settings |
+| `activeTab` | Identify the current tab to relay updated settings and to read the hostname for whitelist / reporting |
+| `storage` | Save and read preferences, theme, whitelists, always-trusted hosts, and local report rate limits |
 | `scripting` | Required by Manifest V3 for content script interaction with page contexts |
-| `tabs` | Find the active tab and apply the toolbar icon animation to the correct tab |
-| `host_permissions: <all_urls>` | Cookie banners appear on any website; the content script must run everywhere |
+| `tabs` | Find the active tab for settings relay, icon animation, and to read the current hostname for reporting |
+| `host_permissions: <all_urls>` | Cookie banners appear on any website; the content script must run everywhere (except whitelisted hostnames, where it exits early) |
 
 ---
 
@@ -208,8 +257,8 @@ See [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) for the full policy.
 
 | Browser | Status |
 |---|---|
-| Microsoft Edge (Chromium) | Fully supported |
-| Google Chrome | Fully supported |
+| Microsoft Edge (Chromium) | Fully supported — [Edge Add-ons listing](https://microsoftedge.microsoft.com/addons/detail/cookie-guardian/hjjpapclkmjdndigcafkcmadkcjfmclj) |
+| Google Chrome | Fully supported (manual load or future store) |
 | Brave, Opera, Vivaldi | Compatible (Chromium-based) |
 | Firefox | Not supported (requires MV2 port) |
 | Safari | Not supported |
@@ -220,12 +269,27 @@ See [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) for the full policy.
 
 Contributions are welcome. If you find a website whose cookie banner is not handled correctly:
 
-1. Open DevTools (`F12`) and enable **Debug logging** in the Cookie Guardian popup.
-2. Reload the page and check the console for `[CookieGuardian]` messages.
-3. Note the CMP platform name (often visible in the DOM or network tab).
-4. Open an issue with the site URL, CMP name, and any relevant DOM selectors.
+1. Click the **Report broken site** button in the Cookie Guardian popup — this opens a pre-filled GitHub issue with the site hostname and your extension version already filled in.
+2. Alternatively, open DevTools (`F12`), enable **Debug logging** in the popup, reload the page, and check the console for `[CookieGuardian]` messages.
+3. Note the CMP platform name (often visible in the DOM or network tab) and include it in the issue.
 
 To add support for a new CMP, add an entry to the `CMP_DICTIONARY` array in `content/content.js` following the existing pattern.
+
+---
+
+## Changelog
+
+### v1.1.0 (2026-03-30 — 2026-04-03)
+- **Published** on [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/cookie-guardian/hjjpapclkmjdndigcafkcmadkcjfmclj)
+- **New:** Site whitelist (current site + managed list); separate InPrivate whitelist cleared when the last InPrivate window closes
+- **New:** Dark mode for the popup (`chrome.storage.local`)
+- **New:** "Report broken site" — pre-filled GitHub issue with hostname; rate-limited locally (1/hostname/24 h, 5/day)
+- **Change:** Preference and option toggles auto-save (no Save Settings button)
+- **Fix:** Master toggle takes effect immediately; disabling stops MutationObserver and polling on the tab
+- **Fix:** Disabled overlay scoped to main content so the header toggle stays usable
+
+### v1.0 (Initial BETA)
+- Initial public release
 
 ---
 
@@ -241,4 +305,4 @@ CMP selector data compiled from publicly observable DOM structures across 50+ co
 
 ---
 
-*Cookie Guardian v1.0 BETA · MV3 · Edge / Chrome*
+*Cookie Guardian v1.1.0 BETA · MV3 · Edge / Chrome*

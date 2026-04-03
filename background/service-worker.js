@@ -97,8 +97,25 @@ function drawOverlayIcon(tabId) {
   });
 }
 
+// ── Auto-cleanup: remove InPrivate whitelist when last incognito window closes ─
+chrome.windows.onRemoved.addListener(function () {
+  chrome.windows.getAll(function (windows) {
+    var hasIncognito = windows.some(function (w) { return w.incognito; });
+    if (!hasIncognito) {
+      chrome.storage.local.remove('cg_whitelisted_domains_private');
+    }
+  });
+});
+
 // ── Message bridge: popup → content scripts ───────────────────────────────────
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+
+  // ── GET_TAB_CONTEXT: tell content script if its tab is incognito ───────────
+  if (message.type === 'GET_TAB_CONTEXT') {
+    var incognito = sender && sender.tab ? sender.tab.incognito : false;
+    sendResponse({ incognito: incognito });
+    return false;
+  }
 
   // ── SETTINGS_UPDATED: relay new settings to all active normal tabs ─────────
   if (message.type === 'SETTINGS_UPDATED') {
@@ -123,6 +140,30 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
     sendResponse({ ok: true });
     return true; // keep channel open
+  }
+
+  // ── WHITELIST_UPDATED: relay only to tabs in the same context ───────────────
+  if (message.type === 'WHITELIST_UPDATED') {
+    var targetIncognito = !!message.incognito;
+    chrome.tabs.query({}, function (tabs) {
+      if (!tabs) return;
+      for (var i = 0; i < tabs.length; i++) {
+        var tab = tabs[i];
+        if (
+          tab.id &&
+          tab.url &&
+          tab.incognito === targetIncognito &&
+          !tab.url.startsWith('chrome://') &&
+          !tab.url.startsWith('edge://') &&
+          !tab.url.startsWith('about:')
+        ) {
+          sendToTab(tab.id, { type: 'WHITELIST_UPDATED' });
+        }
+      }
+    });
+
+    sendResponse({ ok: true });
+    return true;
   }
 
   // ── BANNER_HANDLED: overlay ✅ on the icon for the originating tab ─────────

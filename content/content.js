@@ -73,6 +73,11 @@
   // safeClick is called multiple times (e.g. manage → reject two-step flows).
   let _domainApprovalPromise = null;
 
+  // ── Whitelist state ───────────────────────────────────────────────────────
+  // Cached per page-load so SETTINGS_UPDATED re-arm logic can gate on it
+  // without doing an extra storage read every time the popup sends a message.
+  let pageWhitelisted = false;
+
   // ── Reload-loop guard ────────────────────────────────────────────────────
   // Persists click count across page reloads (within the same tab session)
   // to detect when our clicks cause navigation/reloads → infinite loop.
@@ -1364,11 +1369,25 @@
   // ══════════════════════════════════════════════════════════════════════════
 
   const TRUSTED_DOMAINS_KEY = 'cg_trusted_domains';
+  const WL_KEY_NORMAL       = 'cg_whitelisted_domains';
+  const WL_KEY_PRIVATE      = 'cg_whitelisted_domains_private';
+  let   activeWlKey         = WL_KEY_NORMAL;
 
   function getTrustedDomains() {
     return new Promise(resolve => {
       chrome.storage.local.get({ [TRUSTED_DOMAINS_KEY]: [] }, result => {
         resolve(new Set(result[TRUSTED_DOMAINS_KEY]));
+      });
+    });
+  }
+
+  function isWhitelisted() {
+    return new Promise(resolve => {
+      chrome.storage.local.get({ [activeWlKey]: [] }, result => {
+        const list = result[activeWlKey];
+        const host = location.hostname;
+        const bare = host.replace(/^www\./, '');
+        resolve(list.includes(host) || list.includes(bare));
       });
     });
   }
@@ -1400,34 +1419,41 @@
       style.textContent = `
         .cg-toast {
           position: fixed; bottom: 20px; right: 20px;
-          background: #1e2235; color: #e8eaf0;
-          border: 1px solid #3a3f5c; border-radius: 12px;
+          background: #ffffff; color: #000000;
+          border: 1px solid #000000; border-radius: 8px;
           padding: 14px 16px; z-index: 2147483647;
-          font: 13px/1.5 system-ui, -apple-system, sans-serif;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+          font: 14px/1.43 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.12);
           max-width: 300px; min-width: 240px;
         }
         .cg-header  { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .cg-title   { font-weight: 700; font-size: 13px; color: #7eb8f7; }
-        .cg-host    { font-size: 11px; color: #888; margin-bottom: 6px; word-break: break-all; }
-        .cg-body    { font-size: 12px; color: #c5c9d8; margin-bottom: 10px; }
+        .cg-title   { font-weight: 700; font-size: 16px; line-height: 1.25; color: #000000; }
+        .cg-host    { font-size: 12px; color: #4b4b4b; margin-bottom: 8px; word-break: break-all; }
+        .cg-body    { font-size: 13px; color: #4b4b4b; margin-bottom: 10px; line-height: 1.5; }
         .cg-bar-bg  {
-          height: 3px; background: #2a2f48; border-radius: 2px; margin-bottom: 10px; overflow: hidden;
+          height: 3px; background: #efefef; border-radius: 999px; margin-bottom: 12px; overflow: hidden;
         }
         .cg-bar     {
-          height: 100%; background: #2d6cf4; border-radius: 2px;
+          height: 100%; background: #000000; border-radius: 999px;
           width: 100%;
           transition: width 1s linear;
         }
-        .cg-btns    { display: flex; gap: 6px; }
+        .cg-btns    { display: flex; flex-wrap: wrap; gap: 8px; }
         button {
-          border: none; border-radius: 7px; padding: 5px 12px;
-          font: 12px/1.5 system-ui, sans-serif; cursor: pointer;
-          transition: filter 0.15s;
+          border: none; border-radius: 999px; padding: 10px 12px;
+          font: 12px/1.33 system-ui, sans-serif; font-weight: 500; cursor: pointer;
+          transition: background 0.15s, color 0.15s;
         }
-        button:hover { filter: brightness(1.15); }
-        .cg-always { background: #2d6cf4; color: #fff; font-weight: 600; }
-        .cg-skip   { background: transparent; color: #888; border: 1px solid #444; }
+        .cg-always {
+          background: #000000; color: #ffffff;
+        }
+        .cg-always:hover { background: #1a1a1a; }
+        .cg-always:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
+        .cg-skip   {
+          background: #ffffff; color: #000000; border: 1px solid #000000;
+        }
+        .cg-skip:hover { background: #e2e2e2; }
+        .cg-skip:focus-visible { outline: 2px solid #000; outline-offset: 2px; }
       `;
 
       const toast     = document.createElement('div');
@@ -2237,12 +2263,34 @@
   }
 
   // Live updates from the popup
-  chrome.runtime.onMessage.addListener(msg => {
+  chrome.runtime.onMessage.addListener(async (msg) => {
+    if (msg.type === 'WHITELIST_UPDATED') {
+      pageWhitelisted = await isWhitelisted();
+      if (pageWhitelisted) {
+        log(`Whitelist: ${location.hostname} added — halting`);
+        stopObserver();
+        stopPolling();
+        handled = true;
+      } else if (settings.enabled) {
+        log(`Whitelist: ${location.hostname} removed — re-arming`);
+        handled                = false;
+        retryCount             = 0;
+        moderateRejectAttempts = 0;
+        moderateFallingBack    = false;
+        _domainApprovalPromise = null;
+        clearSessionGuard();
+        startObserver();
+        startPolling();
+        attemptHandle();
+      }
+      return;
+    }
+
     if (msg.type !== 'SETTINGS_UPDATED' || !msg.settings) return;
     const wasDisabled = !settings.enabled;
     Object.assign(settings, msg.settings);
     log('Settings updated live:', settings);
-    if (settings.enabled && (wasDisabled || handled)) {
+    if (settings.enabled && !pageWhitelisted && (wasDisabled || handled)) {
       // Re-arm: allow the extension to act again on this tab
       handled                = false;
       retryCount             = 0;
@@ -2250,9 +2298,24 @@
       moderateFallingBack    = false;
       _domainApprovalPromise = null; // re-evaluate trust on next click attempt
       clearSessionGuard();           // allow fresh attempts after user action
+      startObserver();
+      startPolling();
       attemptHandle();
+    } else if (!settings.enabled) {
+      // Extension was turned off — immediately halt all active monitoring
+      stopObserver();
+      stopPolling();
+      log('Disabled — monitoring stopped');
     }
   });
+
+  function getTabContext() {
+    return new Promise(resolve => {
+      chrome.runtime.sendMessage({ type: 'GET_TAB_CONTEXT' }, response => {
+        resolve(response?.incognito ?? false);
+      });
+    });
+  }
 
   async function init() {
     await loadSettings();
@@ -2260,6 +2323,16 @@
     if (!settings.enabled) {
       log('Disabled — standing by');
       return;   // still listens for SETTINGS_UPDATED to re-arm
+    }
+
+    const isPrivate = await getTabContext();
+    activeWlKey = isPrivate ? WL_KEY_PRIVATE : WL_KEY_NORMAL;
+    log(`Context: ${isPrivate ? 'InPrivate' : 'Normal'} — using key "${activeWlKey}"`);
+
+    pageWhitelisted = await isWhitelisted();
+    if (pageWhitelisted) {
+      log(`Whitelisted — skipping ${location.hostname}`);
+      return;   // still listens for WHITELIST_UPDATED to re-arm
     }
 
     // Reload-loop guard: if we've already clicked multiple times on this

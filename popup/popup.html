@@ -92,10 +92,24 @@
       </div>
     </section>
 
+    <!-- Status toast: between Default Preference and Options (not inside Options) -->
+    <div class="toast toast--below-pref" id="toast" aria-live="polite"></div>
+
     <!-- Options -->
     <section class="section">
       <p class="section-label">Options</p>
       <div class="option-list">
+        <label class="option-row">
+          <span class="option-text">
+            <span class="option-title">Dark mode</span>
+            <span class="option-desc">Dark appearance for this popup</span>
+          </span>
+          <label class="toggle toggle--sm">
+            <input type="checkbox" id="themeToggle" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </label>
+
         <label class="option-row">
           <span class="option-text">
             <span class="option-title">Show activity badge</span>
@@ -103,17 +117,6 @@
           </span>
           <label class="toggle toggle--sm">
             <input type="checkbox" id="showNotifications" />
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          </label>
-        </label>
-
-        <label class="option-row">
-          <span class="option-text">
-            <span class="option-title">Debug logging</span>
-            <span class="option-desc">Output detailed logs to DevTools console</span>
-          </span>
-          <label class="toggle toggle--sm">
-            <input type="checkbox" id="debugMode" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
         </label>
@@ -128,39 +131,86 @@
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
         </label>
+
+        <div class="option-row option-row--action" id="whitelistRow">
+          <span class="option-text">
+            <span class="option-title">Whitelist current site</span>
+            <span class="option-desc" id="whitelistHost">—</span>
+          </span>
+          <button class="wl-action-btn" id="whitelistToggleBtn" title="Add or remove this site from whitelist">
+            <svg class="wl-icon wl-icon--add" width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
+            </svg>
+            <svg class="wl-icon wl-icon--check" width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="currentColor"/>
+            </svg>
+            <span class="wl-action-label">Add</span>
+          </button>
+        </div>
+
+        <label class="option-row">
+          <span class="option-text">
+            <span class="option-title">Debug logging</span>
+            <span class="option-desc">Output detailed logs to DevTools console</span>
+          </span>
+          <label class="toggle toggle--sm">
+            <input type="checkbox" id="debugMode" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </label>
       </div>
     </section>
 
-    <!-- Save button -->
-    <button class="save-btn" id="saveBtn">
-      <span class="save-btn-text">Save Settings</span>
-      <span class="save-btn-icon">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4zm-5 16a3 3 0 110-6 3 3 0 010 6zm3-10H5V5h10v4z"
+    <!-- Whitelisted Sites management -->
+    <section class="section wl-section">
+      <div class="wl-header" id="wlToggleHeader">
+        <p class="section-label">Whitelisted Sites <span class="wl-context-badge" id="wlContextBadge" hidden>InPrivate</span></p>
+        <svg class="wl-chevron" id="wlChevron" width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="wl-panel" id="wlPanel">
+        <div class="wl-add-row">
+          <input type="text" class="wl-input" id="wlInput" placeholder="e.g. example.com" spellcheck="false" />
+          <button class="wl-add-btn" id="wlAddBtn" title="Add domain to whitelist">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+        <ul class="wl-list" id="wlList"></ul>
+        <p class="wl-empty" id="wlEmpty">No whitelisted sites yet</p>
+      </div>
+    </section>
+
+    <!-- Report broken site -->
+    <div class="report-wrap">
+      <button class="report-btn" id="reportBtn" title="Report this site as broken on GitHub">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="currentColor"/>
+        </svg>
+        Report broken site
+      </button>
+    </div>
+
+    <!-- ── Disabled overlay ─────────────────────────────────────────
+         Anchored inside <main> (position:relative) so it only covers
+         the content area — the header toggle stays always clickable. -->
+    <div class="disabled-overlay" id="disabledOverlay">
+      <div class="disabled-msg">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
                 fill="currentColor"/>
         </svg>
-      </span>
-    </button>
-
-    <!-- Status toast -->
-    <div class="toast" id="toast" aria-live="polite"></div>
+        <p>Cookie Guardian is <strong>disabled</strong>.<br/>Toggle the switch above to re-enable.</p>
+      </div>
+    </div>
 
   </main>
 
-  <!-- ── Disabled overlay ───────────────────────────────────────── -->
-  <div class="disabled-overlay" id="disabledOverlay">
-    <div class="disabled-msg">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
-              fill="currentColor"/>
-      </svg>
-      <p>Cookie Guardian is <strong>disabled</strong>.<br/>Toggle the switch above to re-enable.</p>
-    </div>
-  </div>
-
   <!-- ── Footer ─────────────────────────────────────────────────── -->
   <footer class="footer">
-    <a class="footer-link" href="https://github.com/ardatrkl35/Cookie-guardian" target="_blank" rel="noopener noreferrer">Cookie Guardian v1.0 <span class="beta-badge">BETA</span></a>
+    <a class="footer-link" href="https://github.com/ardatrkl35/Cookie-guardian" target="_blank" rel="noopener noreferrer">Cookie Guardian v1.1 <span class="beta-badge">BETA</span></a>
     <span class="footer-dot">·</span>
     <span>MV3 · Edge / Chrome</span>
   </footer>
