@@ -1,9 +1,9 @@
 # Privacy Policy — Cookie Guardian
 
 **Extension Name:** Cookie Guardian  
-**Version:** 1.1.0 (BETA)  
+**Version:** 1.1.1 (BETA)  
 **Platform:** Microsoft Edge (Manifest V3) — [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/cookie-guardian/hjjpapclkmjdndigcafkcmadkcjfmclj) · Google Chrome (manual install)  
-**Last Updated:** April 3, 2026  
+**Last Updated:** April 5, 2026  
 
 ---
 
@@ -38,6 +38,7 @@ The following table describes every piece of information the extension interacts
 | Click counter per hostname | Computed in-memory / `sessionStorage` | Prevents the extension from entering an infinite click-reload loop | **No** — `sessionStorage` is local to the browser tab and is cleared when the tab is closed |
 | Page DOM structure | The website you are visiting | Scanned locally to detect and interact with cookie consent banners | **No** — read-only, never stored or transmitted |
 | Page body text | The website you are visiting | Used to confirm a consent-related phrase is present before acting | **No** — read-only, never stored or transmitted |
+| **Per-host dismissal hint** (`cg_host_dismissal_hints`) | Written automatically after a **successful** banner dismiss on a hostname | Stores the hostname and minimal **strategy metadata** (e.g. which known CMP profile or whether the generic heuristic path was used) so a future visit can try that path first; if it fails, full detection runs as usual | **No** — stored only in `chrome.storage.local`; never synced or transmitted by the extension; not browsing history |
 
 ### What is explicitly NOT collected
 
@@ -69,6 +70,8 @@ Cookie Guardian uses two browser storage APIs, both entirely local to your devic
 4. **InPrivate whitelist** (`cg_whitelisted_domains_private`) — separate list used only in InPrivate / incognito windows. When the last InPrivate window is closed, this key is deleted automatically so whitelists from private sessions do not persist.
 
 5. **Report rate-limit records** (`reports`) — a mapping of hostname to timestamp written automatically each time you submit a bug report via the **Report broken site** button. Used solely to enforce the rate limit (1 report per hostname per 24 hours, 5 unique hostnames per day). Records older than 24 hours are pruned automatically the next time the popup runs a report check. If you have never used the report button, this key may never be written.
+
+6. **Per-host dismissal hints** (`cg_host_dismissal_hints`) — a small JSON object keyed by **hostname** whose values describe **only** which dismissal strategy last succeeded on that host (for example a CMP profile identifier or a flag for the generic path). No full URLs, paths, query strings, or page content are stored. Used solely to reduce redundant detection work on repeat visits; if the remembered path no longer dismisses the banner, the extension falls back to the same full local detection logic as on first visit. Never synced. If you have never had a successful dismiss, this key may be empty or absent.
 
 ---
 
@@ -140,7 +143,7 @@ Cookie Guardian does not share, sell, rent, trade, or otherwise disclose any use
 
 ## 8. Data Security
 
-Because Cookie Guardian stores only a small number of preference values, optional hostname lists (always-trusted and whitelists), popup theme, and temporary report rate-limit records locally on your device, and transmits nothing externally, the security surface area is minimal by design. All data is stored using the browser's native, sandboxed `chrome.storage` APIs and is protected by the browser's own security model and, where applicable, your browser account credentials. Neither storage location is accessible to web pages or other extensions.
+Because Cookie Guardian stores only a small number of preference values, optional hostname lists (always-trusted and whitelists), popup theme, temporary report rate-limit records, and compact per-host dismissal hints locally on your device, and transmits nothing externally, the security surface area is minimal by design. All data is stored using the browser's native, sandboxed `chrome.storage` APIs and is protected by the browser's own security model and, where applicable, your browser account credentials. Neither storage location is accessible to web pages or other extensions.
 
 ---
 
@@ -162,7 +165,7 @@ If you are located in the European Economic Area (EEA), the United Kingdom, or a
 
 To remove all data stored by the extension:
 1. Open the extension popup and adjust or clear lists as desired, or  
-2. To clear specific local keys, open the browser's DevTools on any page, open the **Application** tab, navigate to **Extension Storage → Local**, and delete the relevant keys (`theme`, `cg_trusted_domains`, `cg_whitelisted_domains`, `cg_whitelisted_domains_private`, `reports`), or  
+2. To clear specific local keys, open the browser's DevTools on any page, open the **Application** tab, navigate to **Extension Storage → Local**, and delete the relevant keys (`theme`, `cg_trusted_domains`, `cg_whitelisted_domains`, `cg_whitelisted_domains_private`, `reports`, `cg_host_dismissal_hints`), or  
 3. Uninstall Cookie Guardian — this will remove all locally stored preferences, lists, theme, and report rate-limit records.
 
 ---

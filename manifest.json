@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Cookie Guardian",
-  "version": "1.1.0",
-  "description": "Automatically detects and dismisses cookie consent banners based on your preferred settings. Supports Reject All, Moderate Reject, and Accept All modes across 50+ consent platforms.",
+  "version": "1.1.1",
+  "description": "Dismisses cookie consent banners. Choose Reject All, Moderate Reject, or Accept All on 50+ platforms.",
   "author": "Cookie Guardian",
 
   "icons": {

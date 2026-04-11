@@ -6,6 +6,22 @@ The format is loosely inspired by [Keep a Changelog](https://keepachangelog.com/
 
 ---
 
+## [1.1.1] — 2026-04-05
+
+### Added
+
+- **Per-host dismissal hints** — `cg_host_dismissal_hints` in `chrome.storage.local`; one fast path per page load from the last successful CMP or generic strategy, with automatic fallback to full detection if the banner is not cleared.
+
+### Changed
+
+- **Performance** — Batched shadow-root discovery once per detection pass (`createShadowRootCache`); `deepQuery` / `deepQueryAll` reuse the same root list; `attachToNewShadowRoots` reuses that list after each pass (avoids a second full-document walk in the same tick).
+
+### Documentation
+
+- **`README.md`**, **`PRIVACY_POLICY.md`** — version and changelog updates for hints and performance.
+
+---
+
 ## [1.1.0] — 2026-03-30 to 2026-04-03
 
 ### Added

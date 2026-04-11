@@ -2,7 +2,7 @@
 
 > Automatically detects and dismisses cookie consent banners based on your preferred settings — silently, instantly, on every website you visit.
 
-![Version](https://img.shields.io/badge/version-1.1.0_BETA-blue)
+![Version](https://img.shields.io/badge/version-1.1.1_BETA-blue)
 ![Manifest](https://img.shields.io/badge/manifest-v3-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Edge_%2F_Chrome-0078D4)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -28,6 +28,8 @@ Three modes to choose from:
 
 - **50+ supported CMPs** — OneTrust, Cookiebot, Usercentrics, Didomi, TrustArc, CookieYes, Iubenda, Axeptio, Sourcepoint, HubSpot, and many more
 - **Shadow DOM piercing** — handles CMPs rendered inside Web Components
+- **Efficient detection** — within each detection pass, shadow roots are discovered once and reused for all queries, avoiding repeated full-document walks that hurt performance on large pages
+- **Repeat-visit hints (optional)** — after a banner is dismissed successfully, the extension may store which strategy worked for that hostname (e.g. known CMP profile vs generic path) in `chrome.storage.local`. On the next visit it tries that path first; if the banner is not cleared, it automatically runs the full detection pipeline so site changes or A/B tests still work
 - **Same-origin iframe scanning** — catches banners loaded inside frames (Termly, Cookiebot hosted)
 - **21-language heuristics** — English, Turkish, German, French, Spanish, Italian, Dutch, Portuguese, Polish, Swedish, Norwegian, Danish, Finnish, Czech, Slovak, Greek, Romanian, Hungarian, Japanese, Korean, Chinese
 - **Reload-loop guard** — detects when clicks cause page reloads and automatically stands down
@@ -57,6 +59,7 @@ Three modes to choose from:
 | **Whitelisted Sites** | Expandable list: type a domain and add, or remove entries — these sites are skipped entirely by the extension | `chrome.storage.local` (separate key in InPrivate) |
 | **Debug logging** | Extra `[CookieGuardian]` messages in the page console | `chrome.storage.sync` |
 | **Report broken site** | Opens GitHub with hostname + version pre-filled (subject to rate limits) | Rate-limit map in `chrome.storage.local` |
+| **Per-host dismissal hint** | Speeds repeat visits by trying the last successful approach once per load, then full detection if needed | `chrome.storage.local` — hostname + strategy metadata only; never synced; cleared on uninstall |
 
 ---
 
@@ -201,28 +204,34 @@ cookie-guardian/
  │ Service Worker   │              │  1. Load settings    │
  │ service-worker   │─relay───────►│  2. Skip if disabled │
  │ .js              │              │     or whitelisted   │
- └──────────────────┘              │  3. Watch DOM        │
+ └──────────────────┘                                                │  3. Watch DOM        │
                                   │     (MutationObserver│
                                   │      + polling)      │
-                                  │  4. Match CMP profile│
-                                  │  5. Pierce Shadow DOM│
-                                  │  6. Confirm toast    │
+                                  │  4. Optional: try    │
+                                  │     stored hint for  │
+                                  │     this hostname    │
+                                  │  5. Match CMP profile│
+                                  │  6. Pierce Shadow DOM│
+                                  │     (batched roots   │
+                                  │      per pass)       │
+                                  │  7. Confirm toast    │
                                   │     (heuristic path) │
-                                  │  7. Click button     │
+                                  │  8. Click button     │
                                   └──────────────────────┘
 ```
 
 On each page:
 1. The **content script** loads your saved preferences from `chrome.storage.sync` and checks whitelist / InPrivate context in `chrome.storage.local`.
 2. If the hostname is **whitelisted**, the extension exits and does not monitor the page.
-3. Otherwise it scans the DOM for known CMP containers.
-4. If a known CMP is found, it uses precise selectors to click the correct button — silently, with no confirmation prompt.
-5. If no known CMP matches, a **multilingual heuristic scorer** scans clickable elements using regex pattern banks across 21 languages.
-6. If **Confirm on new sites** is enabled and the hostname is not in the always-trusted list, a **countdown toast** appears for 4 seconds before the heuristic click. You can **Cancel**, **Always trust**, or wait for auto-proceed.
-7. A **MutationObserver** watches for banners injected after page load (async loaders, SPAs).
-8. A **polling fallback** runs every 500 ms for up to 40 seconds as a belt-and-suspenders layer.
-9. When a banner is handled, the service worker briefly animates the toolbar icon (if the activity badge option is on).
-10. If the master toggle is turned **off**, the content script stops observers and polling until re-enabled.
+3. Otherwise it scans the DOM for known CMP containers. **Shadow-root discovery** for piercing is **batched per detection pass** so the same walk is not repeated for every selector.
+4. If a **per-host dismissal hint** is stored (see Features), the extension may try that **narrow path first** on early passes; if the banner is not dismissed, it **falls back** to the full CMP list and generic heuristics — same end state as today.
+5. If a known CMP is found, it uses precise selectors to click the correct button — silently, with no confirmation prompt.
+6. If no known CMP matches, a **multilingual heuristic scorer** scans clickable elements using regex pattern banks across 21 languages.
+7. If **Confirm on new sites** is enabled and the hostname is not in the always-trusted list, a **countdown toast** appears for 4 seconds before the heuristic click. You can **Cancel**, **Always trust**, or wait for auto-proceed.
+8. A **MutationObserver** watches for banners injected after page load (async loaders, SPAs).
+9. A **polling fallback** runs every 500 ms for up to 40 seconds as a belt-and-suspenders layer.
+10. When a banner is handled, the service worker briefly animates the toolbar icon (if the activity badge option is on). A successful dismiss may **refresh** the per-host hint for the next visit.
+11. If the master toggle is turned **off**, the content script stops observers and polling until re-enabled.
 
 ---
 
@@ -233,7 +242,7 @@ Cookie Guardian collects **no personal data whatsoever.**
 - All processing is local to your device.
 - No browsing data, page content, or usage analytics are ever transmitted.
 - Core preferences use `chrome.storage.sync` (optional browser sync between your own devices).
-- Popup **Dark mode** and all hostname lists (`whitelist`, always-trusted, InPrivate whitelist) use `chrome.storage.local` and are not uploaded by the extension.
+- Popup **Dark mode**, hostname lists (`whitelist`, always-trusted, InPrivate whitelist), and any **per-host dismissal hints** (strategy metadata after a successful dismiss) use `chrome.storage.local` and are not uploaded by the extension.
 - **Report broken site** only puts the **hostname** in the pre-filled issue. A local rate-limit record is never transmitted.
 - No third-party SDKs, analytics, or tracking of any kind are included.
 
@@ -279,6 +288,10 @@ To add support for a new CMP, add an entry to the `CMP_DICTIONARY` array in `con
 
 ## Changelog
 
+### v1.1.1 (2026-04-05)
+- **Performance:** Batched shadow-root discovery **once per detection pass** (`createShadowRootCache`) — all `deepQuery` / `deepQueryAll` calls reuse the same root list; `attachToNewShadowRoots` reuses that list after each pass (no second full-document walk).
+- **Repeat visits:** **Per-host dismissal hints** (`cg_host_dismissal_hints` in `chrome.storage.local`) — one fast path per page load from the last successful CMP or generic strategy, with **automatic fallback** to the full CMP + generic pipeline if the banner is not cleared.
+
 ### v1.1.0 (2026-03-30 — 2026-04-03)
 - **Published** on [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/cookie-guardian/hjjpapclkmjdndigcafkcmadkcjfmclj)
 - **New:** Site whitelist (current site + managed list); separate InPrivate whitelist cleared when the last InPrivate window closes
@@ -305,4 +318,4 @@ CMP selector data compiled from publicly observable DOM structures across 50+ co
 
 ---
 
-*Cookie Guardian v1.1.0 BETA · MV3 · Edge / Chrome*
+*Cookie Guardian v1.1.1 BETA · MV3 · Edge / Chrome*

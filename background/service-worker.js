@@ -1,5 +1,5 @@
 // =============================================================================
-// Cookie Guardian — Background Service Worker  v3.1
+// Cookie Guardian — Background Service Worker  v1.1.1
 // Handles installation defaults and message routing from the popup.
 //
 // FIX NOTES (v3.1):

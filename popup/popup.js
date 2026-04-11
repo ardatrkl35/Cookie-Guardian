@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Cookie Guardian — Popup Script  v3.2
+// Cookie Guardian — Popup Script  v1.1.1
 // Loads saved settings, binds UI, and persists changes via chrome.storage.sync
 // Supports three preference modes: 'reject' | 'moderate' | 'accept'
 // ─────────────────────────────────────────────────────────────────────────────

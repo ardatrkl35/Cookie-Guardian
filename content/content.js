@@ -1,5 +1,5 @@
 // =============================================================================
-//  Cookie Guardian — Content Script  v3.0  (Enterprise Edition)
+//  Cookie Guardian — Content Script  v1.1.1  (Enterprise Edition)
 //  Manifest V3 · Microsoft Edge / Chrome
 //
 //  Sources:
@@ -51,6 +51,12 @@
   let pollingTimer   = null;
   let retryCount     = 0;
   let debounceTimer  = null;
+
+  // Per-host dismissal hints — chrome.storage.local; one fast-path try per page load
+  const HOST_HINTS_KEY        = 'cg_host_dismissal_hints';
+  let   hostHints             = {};
+  let   hostHintsLoaded       = false;
+  let   hostHintFastPathTried = false;
 
   // ── Moderate-reject state ──────────────────────────────────────────────────
   // Counts how many full detection passes were run while seeking a reject
@@ -1256,20 +1262,37 @@
     return result;
   }
 
+  /**
+   * Memoises collectShadowRoots(root) per root for one detection pass — avoids
+   * dozens of full-document '*' walks inside a single attemptHandle tick.
+   */
+  function createShadowRootCache() {
+    const cache = new WeakMap();
+    return function getShadowRoots(r) {
+      if (!r) return [];
+      if (cache.has(r)) return cache.get(r);
+      const list = collectShadowRoots(r);
+      cache.set(r, list);
+      return list;
+    };
+  }
+
   /** querySelector that falls through light DOM then all reachable shadow roots. */
-  function deepQuery(selector, root = document) {
+  function deepQuery(selector, root = document, getShadowRoots = null) {
     try { const d = root.querySelector(selector); if (d) return d; } catch (_) {}
-    for (const sr of collectShadowRoots(root)) {
+    const roots = getShadowRoots ? getShadowRoots(root) : collectShadowRoots(root);
+    for (const sr of roots) {
       try { const f = sr.querySelector(selector); if (f) return f; } catch (_) {}
     }
     return null;
   }
 
   /** querySelectorAll across light DOM + every shadow root. */
-  function deepQueryAll(selector, root = document) {
+  function deepQueryAll(selector, root = document, getShadowRoots = null) {
     const out = [];
     try { out.push(...root.querySelectorAll(selector)); } catch (_) {}
-    for (const sr of collectShadowRoots(root)) {
+    const roots = getShadowRoots ? getShadowRoots(root) : collectShadowRoots(root);
+    for (const sr of roots) {
       try { out.push(...sr.querySelectorAll(selector)); } catch (_) {}
     }
     return out;
@@ -1293,12 +1316,12 @@
    * Return first match from a selector list.
    * Priority: explicit shadow root → light DOM → deep-pierce all roots.
    */
-  function queryFirst(selectors, root = document, shadowRoot = null) {
+  function queryFirst(selectors, root = document, shadowRoot = null, getShadowRoots = null) {
     for (const sel of selectors) {
       try {
         if (shadowRoot) { const e = shadowRoot.querySelector(sel); if (e) return e; }
         const light = root.querySelector(sel);  if (light) return light;
-        const deep  = deepQuery(sel, root);      if (deep)  return deep;
+        const deep  = deepQuery(sel, root, getShadowRoots); if (deep) return deep;
       } catch (_) {}
     }
     return null;
@@ -1326,6 +1349,30 @@
       const r = document.evaluate(expr, ctx, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
       return r.singleNodeValue ?? null;
     } catch (_) { return null; }
+  }
+
+  /** Like xpathText but skips navigational <a href="http…"> matches (SERP / article links). */
+  function xpathTextFirstSafe(text, ctx = document.body) {
+    if (!ctx) return null;
+    const lo = text.toLowerCase().replace(/'/g, "\\'");
+    const UP  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const LO  = 'abcdefghijklmnopqrstuvwxyz';
+    const expr = `.//*[contains(
+        translate(normalize-space(.),'${UP}','${LO}'), '${lo}'
+      ) and (
+        self::button or self::a or
+        (self::div   and @role='button') or
+        (self::span  and @role='button') or
+        self::input[@type='button' or @type='submit']
+      )]`;
+    try {
+      const r = document.evaluate(expr, ctx, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+      for (let i = 0; i < r.snapshotLength; i++) {
+        const node = r.snapshotItem(i);
+        if (node && isVisible(node) && !isUnsafeHeuristicAnchor(node)) return node;
+      }
+    } catch (_) {}
+    return null;
   }
 
 
@@ -1587,8 +1634,8 @@
    *   2. Check its text / aria attributes in the light DOM
    *   3. Dispatch the click on the host (not the inner shadow element)
    */
-  function findEflButton(intent) {
-    const hosts = deepQueryAll('efl-button, .efl-button, [is="efl-button"]');
+  function findEflButton(intent, getShadowRoots = null) {
+    const hosts = deepQueryAll('efl-button, .efl-button, [is="efl-button"]', document, getShadowRoots);
     const patterns = intent === 'reject' ? REJECT_PATTERNS : ACCEPT_PATTERNS;
 
     for (const host of hosts) {
@@ -1655,9 +1702,18 @@
     '[role="button"]', '[tabindex="0"]',
   ].join(',');
 
-  function collectClickables(root) {
-    const els = deepQueryAll(CLICKABLE_SEL, root);
+  /** True for <a> with an href that would navigate (same idea as safeClick). */
+  function isUnsafeHeuristicAnchor(el) {
+    if (!el || el.tagName !== 'A') return false;
+    const href = el.getAttribute('href') || '';
+    return !!href && !href.startsWith('#') && !href.startsWith('javascript:');
+  }
+
+  function collectClickables(root, opts = {}, getShadowRoots = null) {
+    const rejectNav = opts.rejectNavAnchors === true;
+    const els = deepQueryAll(CLICKABLE_SEL, root, getShadowRoots);
     return els.filter(el => {
+      if (rejectNav && isUnsafeHeuristicAnchor(el)) return false;
       const l = getLabel(el);
       return l.length > 0 && l.length < 120;
     });
@@ -1677,14 +1733,19 @@
    *   2. XPath fallback per key phrase  (if pass 1 scores nothing)
    *   3. efl-button scan
    *   4. Custom element scan
+   *
+   * opts.rejectNavAnchors — exclude <a href="http…"> from scoring/XPath (avoids SERP/article links).
+   * opts.skipEflCustom     — skip passes 3–4 (used when root is a tight overlay subtree).
    */
-  function findByHeuristic(intent, root = document) {
+  function findByHeuristic(intent, root = document, opts = {}, getShadowRoots = null) {
+    const rejectNav  = opts.rejectNavAnchors === true;
+    const skipGlobal = opts.skipEflCustom === true;
     const patterns   = intent === 'reject' ? REJECT_PATTERNS : ACCEPT_PATTERNS;
     const xpathTerms = intent === 'reject' ? REJECT_XPATH    : ACCEPT_XPATH;
     const THRESHOLD  = 7;
 
     // Pass 1 — score-based
-    const candidates = collectClickables(root);
+    const candidates = collectClickables(root, { rejectNavAnchors: rejectNav }, getShadowRoots);
     log(`Heuristic: ${candidates.length} clickables, intent="${intent}"`);
     let best = null, bestScore = 0;
     for (const el of candidates) {
@@ -1699,12 +1760,14 @@
     // Pass 2 — XPath text search
     const xCtx = (root === document) ? document.body : root;
     for (const term of xpathTerms) {
-      const el = xpathText(term, xCtx);
+      const el = rejectNav ? xpathTextFirstSafe(term, xCtx) : xpathText(term, xCtx);
       if (el && isVisible(el)) { log(`XPath: "${term}" →`, getLabel(el)); return el; }
     }
 
+    if (skipGlobal) return null;
+
     // Pass 3 — efl-button custom element
-    const efl = findEflButton(intent);
+    const efl = findEflButton(intent, getShadowRoots);
     if (efl) return efl;
 
     // Pass 4 — other custom consent elements
@@ -1742,8 +1805,9 @@
           }
         }
 
-        // Heuristic inside iframe
-        const el = findByHeuristic(intent, doc.body);
+        // Heuristic inside iframe (separate shadow-root cache per iframe document)
+        const iframeGsr = createShadowRootCache();
+        const el = findByHeuristic(intent, doc.body, {}, iframeGsr);
         if (el) { log('iframe heuristic match'); return el; }
       } catch (_) { /* cross-origin — skip silently */ }
     }
@@ -1777,7 +1841,8 @@
         }
 
         // Heuristic inside iframe
-        const el = findByHeuristic(intent, doc.body);
+        const iframeGsr = createShadowRootCache();
+        const el = findByHeuristic(intent, doc.body, {}, iframeGsr);
         if (el) { log('container-iframe heuristic match'); return el; }
       } catch (_) { /* cross-origin — skip silently */ }
     }
@@ -1795,10 +1860,10 @@
   // polling pass to click manage again (toggle open→close→open endlessly).
   const _managedClickedKeys = new Set();
 
-  async function handleProfile(profile) {
+  async function handleProfile(profile, getShadowRoots) {
     // Detect container presence (light DOM + shadow pierce)
     const containerFound = profile.containers.some(sel => {
-      try { return !!deepQuery(sel); } catch (_) { return false; }
+      try { return !!deepQuery(sel, document, getShadowRoots); } catch (_) { return false; }
     });
     if (!containerFound) return false;
 
@@ -1809,7 +1874,7 @@
     const primary = want === 'reject' ? profile.reject : profile.accept;
 
     // ── Direct button hit ────────────────────────────────────────────────
-    const btn = queryFirst(primary, document, sr);
+    const btn = queryFirst(primary, document, sr, getShadowRoots);
     if (btn) {
       log(`${profile.name}: direct → "${getLabel(btn)}"`);
       return await safeClick(btn);
@@ -1823,7 +1888,7 @@
       // If manage was already opened this session, skip clicking it again to
       // avoid the open→close→open loop. Still try to find buttons.
       if (!manageAlreadyClicked) {
-        const manageBtn = queryFirst(profile.manage, document, sr);
+        const manageBtn = queryFirst(profile.manage, document, sr, getShadowRoots);
         if (manageBtn) {
           log(`${profile.name}: opening manage panel…`);
           _managedClickedKeys.add(manageGuardKey);
@@ -1833,7 +1898,7 @@
       }
 
       const newSr  = getProfileShadowRoot(profile);
-      const reject = queryFirst(profile.reject, document, newSr ?? sr);
+      const reject = queryFirst(profile.reject, document, newSr ?? sr, getShadowRoots);
       if (reject) {
         log(`${profile.name}: panel reject → "${getLabel(reject)}"`);
         await safeClick(reject);
@@ -1841,12 +1906,13 @@
         // first reject click (e.g. TrustArc on Audible/EA, Danske Bank).
         // Wait briefly then look for another actionable reject target.
         await delay(700);
-        const confirm = queryFirst(profile.reject, document, newSr ?? sr);
+        const confirm = queryFirst(profile.reject, document, newSr ?? sr, getShadowRoots);
         if (confirm && confirm !== reject && isVisible(confirm)) {
           log(`${profile.name}: secondary confirmation → "${getLabel(confirm)}"`);
           await safeClick(confirm);
         } else {
-          const hConfirm = findByHeuristic('reject', newSr ?? sr ?? document);
+          const hRoot = newSr ?? sr ?? document;
+          const hConfirm = findByHeuristic('reject', hRoot, {}, getShadowRoots);
           if (hConfirm && hConfirm !== reject && isVisible(hConfirm)) {
             log(`${profile.name}: secondary heuristic confirm → "${getLabel(hConfirm)}"`);
             await safeClick(hConfirm);
@@ -1856,19 +1922,20 @@
       }
 
       // Heuristic inside the panel
-      const h = findByHeuristic('reject', newSr ?? sr ?? document);
+      const panelRoot = newSr ?? sr ?? document;
+      const h = findByHeuristic('reject', panelRoot, {}, getShadowRoots);
       if (h) {
         await safeClick(h);
         // After clicking a heuristic element (e.g. a per-category radio button),
         // wait briefly then look for a higher-priority reject or a finalize button
         // so the panel is properly dismissed (e.g. Didomi "Tout refuser" / "Enregistrer").
         await delay(700);
-        const h2 = findByHeuristic('reject', newSr ?? sr ?? document);
+        const h2 = findByHeuristic('reject', panelRoot, {}, getShadowRoots);
         if (h2 && h2 !== h && isVisible(h2)) {
           log(`${profile.name}: secondary heuristic panel → "${getLabel(h2)}"`);
           await safeClick(h2);
         } else if (profile.manageFinalize) {
-          const finalizeBtn = queryFirst(profile.manageFinalize, document, newSr ?? sr);
+          const finalizeBtn = queryFirst(profile.manageFinalize, document, newSr ?? sr, getShadowRoots);
           if (finalizeBtn && finalizeBtn !== h && isVisible(finalizeBtn)) {
             log(`${profile.name}: heuristic finalize panel → "${getLabel(finalizeBtn)}"`);
             await safeClick(finalizeBtn);
@@ -1881,7 +1948,7 @@
       // (e.g. TrustArc preference-center "Submit" button that saves the current
       // selection — which defaults to necessary-only on most sites).
       if (profile.manageFinalize) {
-        const finalizeBtn = queryFirst(profile.manageFinalize, document, newSr ?? sr);
+        const finalizeBtn = queryFirst(profile.manageFinalize, document, newSr ?? sr, getShadowRoots);
         if (finalizeBtn) {
           log(`${profile.name}: finalize panel → "${getLabel(finalizeBtn)}"`);
           await safeClick(finalizeBtn);
@@ -1897,10 +1964,10 @@
     // ── Heuristic within detected container ──────────────────────────────
     const containerEl = profile.containers.reduce((found, sel) => {
       if (found) return found;
-      try { return deepQuery(sel); } catch (_) { return null; }
+      try { return deepQuery(sel, document, getShadowRoots); } catch (_) { return null; }
     }, null);
     if (containerEl) {
-      const h = findByHeuristic(want, containerEl);
+      const h = findByHeuristic(want, containerEl, {}, getShadowRoots);
       if (h) return await safeClick(h);
 
       // Scan iframes within the container (Sourcepoint renders inside iframes)
@@ -1919,7 +1986,76 @@
   //      Runs when no known CMP profile matched.
   // ══════════════════════════════════════════════════════════════════════════
 
-  async function handleGeneric() {
+  /** Major SERPs — generic body-text + XPath false-positive on snippets (see plan). */
+  function isSearchEngineResultsPage() {
+    const host = location.hostname.replace(/^www\./, '');
+    const path = location.pathname;
+    const q = location.search;
+
+    if (/(^|\.)google\./i.test(location.hostname) && path.startsWith('/search')) return true;
+    if (host === 'bing.com' && path.startsWith('/search')) return true;
+    if (host === 'duckduckgo.com' && (path === '/' || path === '') && /[?&]q=/.test(q)) return true;
+    if (host === 'search.yahoo.com') return true;
+    if (host === 'yahoo.com' && path.startsWith('/search')) return true;
+    if (host === 'ecosia.org' && path.startsWith('/search')) return true;
+    if (host === 'startpage.com' && path.startsWith('/sp/search')) return true;
+    if (location.hostname === 'search.brave.com' && path.startsWith('/search')) return true;
+    return false;
+  }
+
+  function intersectsLowerViewport(el, fraction) {
+    const r = el.getBoundingClientRect();
+    const vh = window.innerHeight;
+    const line = vh * fraction;
+    return r.bottom > line && r.top < vh - 8;
+  }
+
+  /** Drop overlay nodes that are ancestors of another candidate (prefer innermost). */
+  function dedupeOverlayAncestors(nodes) {
+    const arr = [...nodes];
+    return arr.filter(el => !arr.some(other => other !== el && el.contains(other)));
+  }
+
+  /**
+   * Fixed/sticky layers in the lower viewport + cookie-ish dialogs.
+   * Used when only the body-text gate matched (no banner selectors).
+   */
+  function gatherLikelyCookieOverlays() {
+    const roots = new Set();
+    try {
+      const dialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"], [aria-modal="true"]');
+      for (const d of dialogs) {
+        if (isVisible(d)) roots.add(d);
+      }
+      const vh = window.innerHeight;
+      const all = document.body ? document.body.getElementsByTagName('*') : [];
+      for (let i = 0; i < all.length; i++) {
+        const el = all[i];
+        let style;
+        try { style = window.getComputedStyle(el); } catch (_) { continue; }
+        const pos = style.position;
+        if (pos !== 'fixed' && pos !== 'sticky') continue;
+        if (!isVisible(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < 64 || r.height < 20) continue;
+        if (!intersectsLowerViewport(el, 0.45)) continue;
+        const z = parseInt(style.zIndex, 10);
+        if (pos === 'fixed' && (r.bottom >= vh * 0.35 || (!Number.isNaN(z) && z >= 50))) {
+          roots.add(el);
+        } else if (pos === 'sticky') {
+          roots.add(el);
+        }
+      }
+    } catch (_) {}
+    return dedupeOverlayAncestors(roots);
+  }
+
+  async function handleGeneric(getShadowRoots) {
+    if (isSearchEngineResultsPage()) {
+      log('Generic: skip — search engine results page');
+      return false;
+    }
+
     // Banner fingerprints — only selectors specific to cookie/consent UI.
     // Removed overly broad selectors (fixed-bottom overlays, generic dialogs)
     // that caused false positives on hotel booking bars, chat widgets, etc.
@@ -1941,9 +2077,10 @@
     ];
 
     let bannerRoot = null;
+    let usedBodyTextGateOnly = false;
     for (const sel of bannerSels) {
       try {
-        const el = deepQuery(sel);
+        const el = deepQuery(sel, document, getShadowRoots);
         if (el && isVisible(el)) { bannerRoot = el; break; }
       } catch (_) {}
     }
@@ -2062,20 +2199,41 @@
         ));
       if (!relevant) return false;
       bannerRoot = document.body;
+      usedBodyTextGateOnly = true;
       log('Generic: body-text gate passed (consent phrases detected)');
     }
 
     log('Generic: root =', bannerRoot.tagName, bannerRoot.id || '');
 
+    const overlayHeuristicOpts = { skipEflCustom: true, rejectNavAnchors: true };
+
+    if (usedBodyTextGateOnly) {
+      const overlays = gatherLikelyCookieOverlays();
+      if (!overlays.length) {
+        log('Generic: body-text gate but no overlay/dialog candidate — skip');
+        return false;
+      }
+      // First-visit confirmation gate — only on the heuristic path.
+      if (!await getApproval()) {
+        log('First-visit confirmation: user cancelled — leaving banner untouched');
+        return false;
+      }
+      for (const sub of overlays) {
+        const el = findByHeuristic(settings.preference, sub, overlayHeuristicOpts, getShadowRoots);
+        if (el) return await safeClick(el);
+      }
+      const iframeEl = await scanIframes(settings.preference);
+      if (iframeEl) return await safeClick(iframeEl);
+      return false;
+    }
+
     // First-visit confirmation gate — only on the heuristic path.
-    // CMP Dictionary matches (handleProfile) never reach this check, so known
-    // platforms (OneTrust, Cookiebot, etc.) are always handled without friction.
     if (!await getApproval()) {
       log('First-visit confirmation: user cancelled — leaving banner untouched');
       return false;
     }
 
-    const el = findByHeuristic(settings.preference, bannerRoot);
+    const el = findByHeuristic(settings.preference, bannerRoot, {}, getShadowRoots);
     if (el) return await safeClick(el);
 
     // Also scan iframes as last resort
@@ -2118,8 +2276,32 @@
     return 'accept';
   }
 
-  async function attemptHandle() {
+  async function loadHostHints() {
+    return new Promise(resolve => {
+      chrome.storage.local.get({ [HOST_HINTS_KEY]: {} }, s => {
+        hostHints = s[HOST_HINTS_KEY] || {};
+        hostHintsLoaded = true;
+        resolve();
+      });
+    });
+  }
+
+  /** Persist which dismissal path last succeeded for this hostname (device-local only). */
+  function persistHostDismissalHint(payload) {
+    const host = location.hostname;
+    chrome.storage.local.get({ [HOST_HINTS_KEY]: {} }, s => {
+      const next = { ...(s[HOST_HINTS_KEY] || {}), [host]: { ...payload, v: 1, ts: Date.now() } };
+      hostHints = next;
+      chrome.storage.local.set({ [HOST_HINTS_KEY]: next });
+    });
+  }
+
+  /**
+   * @param {function} getShadowRoots — from createShadowRootCache(); required for perf.
+   */
+  async function attemptHandle(getShadowRoots) {
     if (handled || !settings.enabled) return;
+    if (!getShadowRoots) getShadowRoots = createShadowRootCache();
 
     const effectivePref = resolveEffectivePref();
 
@@ -2137,22 +2319,65 @@
     if (settings.preference === 'moderate') settings.preference = effectivePref;
 
     try {
+      // ⓪ Per-host hint — one narrow try per page load, then full pipeline
+      if (!hostHintFastPathTried) {
+        hostHintFastPathTried = true;
+        if (!hostHintsLoaded) await loadHostHints();
+        const hint = hostHints[location.hostname];
+        if (hint && hint.v === 1) {
+          log('Host hint fast path:', hint);
+          try {
+            let ok = false;
+            if (hint.kind === 'cmp' && hint.profile) {
+              const prof = CMP_DICTIONARY.find(p => p.name === hint.profile);
+              if (prof) ok = await handleProfile(prof, getShadowRoots);
+            } else if (hint.kind === 'generic') {
+              ok = await handleGeneric(getShadowRoots);
+            }
+            if (ok) {
+              persistHostDismissalHint(
+                hint.kind === 'cmp'
+                  ? { kind: 'cmp', profile: hint.profile }
+                  : { kind: 'generic' },
+              );
+              markHandled();
+              return;
+            }
+          } catch (err) { warn('Host hint fast path:', err); }
+        }
+      }
+
       // ① Known CMP profiles (fast, precise)
       for (const profile of CMP_DICTIONARY) {
         try {
-          if (await handleProfile(profile)) { markHandled(); return; }
+          if (await handleProfile(profile, getShadowRoots)) {
+            persistHostDismissalHint({ kind: 'cmp', profile: profile.name });
+            markHandled();
+            return;
+          }
         } catch (err) { warn(`Profile "${profile.name}":`, err); }
       }
 
       // ② Generic multilingual heuristic (broad)
       try {
-        if (await handleGeneric()) { markHandled(); return; }
+        if (await handleGeneric(getShadowRoots)) {
+          persistHostDismissalHint({ kind: 'generic' });
+          markHandled();
+          return;
+        }
       } catch (err) { warn('Generic handler:', err); }
 
     } finally {
       // Always restore the real preference before returning
       settings.preference = savedPref;
     }
+  }
+
+  async function runDetectionPass() {
+    if (handled || !settings.enabled) return;
+    const getShadowRoots = createShadowRootCache();
+    await attemptHandle(getShadowRoots);
+    attachToNewShadowRoots(getShadowRoots);
   }
 
   function markHandled() {
@@ -2181,8 +2406,7 @@
     if (handled) { stopObserver(); return; }
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
-      await attemptHandle();
-      attachToNewShadowRoots();   // pick up any shadow roots created mid-flight
+      try { await runDetectionPass(); } catch (err) { warn('runDetectionPass:', err); }
     }, DEBOUNCE_MS);
   }
 
@@ -2199,8 +2423,9 @@
     log('Observing', root === document.body ? 'document.body' : 'a shadow root');
   }
 
-  function attachToNewShadowRoots() {
-    for (const sr of collectShadowRoots(document)) {
+  function attachToNewShadowRoots(getShadowRoots = null) {
+    const roots = getShadowRoots ? getShadowRoots(document) : collectShadowRoots(document);
+    for (const sr of roots) {
       if (!observedShadowRoots.has(sr)) attachObserverTo(sr);
     }
   }
@@ -2237,8 +2462,7 @@
         return;
       }
       retryCount++;
-      await attemptHandle();
-      attachToNewShadowRoots();  // keep shadow coverage current
+      await runDetectionPass();
     }, 500);
     log(`Polling started (max ${MAX_RETRY} × 500 ms = ${MAX_RETRY * 500 / 1000} s)`);
   }
@@ -2277,11 +2501,12 @@
         retryCount             = 0;
         moderateRejectAttempts = 0;
         moderateFallingBack    = false;
+        hostHintFastPathTried  = false;
         _domainApprovalPromise = null;
         clearSessionGuard();
         startObserver();
         startPolling();
-        attemptHandle();
+        await runDetectionPass();
       }
       return;
     }
@@ -2296,11 +2521,12 @@
       retryCount             = 0;
       moderateRejectAttempts = 0;   // reset moderate-reject counter
       moderateFallingBack    = false;
+      hostHintFastPathTried  = false;
       _domainApprovalPromise = null; // re-evaluate trust on next click attempt
       clearSessionGuard();           // allow fresh attempts after user action
       startObserver();
       startPolling();
-      attemptHandle();
+      await runDetectionPass();
     } else if (!settings.enabled) {
       // Extension was turned off — immediately halt all active monitoring
       stopObserver();
@@ -2325,6 +2551,8 @@
       return;   // still listens for SETTINGS_UPDATED to re-arm
     }
 
+    await loadHostHints();
+
     const isPrivate = await getTabContext();
     activeWlKey = isPrivate ? WL_KEY_PRIVATE : WL_KEY_NORMAL;
     log(`Context: ${isPrivate ? 'InPrivate' : 'Normal'} — using key "${activeWlKey}"`);
@@ -2348,7 +2576,7 @@
     log(`Ready | pref="${settings.preference}" | ${location.hostname}`);
 
     // ① Immediate pass — catches banners already in DOM at document_idle
-    await attemptHandle();
+    await runDetectionPass();
 
     if (!handled) {
       startObserver();   // ② DOM mutation watch (light + shadow)
