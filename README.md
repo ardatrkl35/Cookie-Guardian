@@ -2,7 +2,7 @@
 
 > Automatically detects and dismisses cookie consent banners based on your preferred settings — silently, instantly, on every website you visit.
 
-![Version](https://img.shields.io/badge/version-1.1.1_BETA-blue)
+![Version](https://img.shields.io/badge/version-1.2.0_BETA-blue)
 ![Manifest](https://img.shields.io/badge/manifest-v3-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Edge_%2F_Chrome-0078D4)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -42,7 +42,7 @@ Three modes to choose from:
 - **Confirm on new sites** — optional countdown toast before auto-clicking when the site is matched only by heuristics (not a known CMP); auto-proceeds after 4 seconds. **Always trust** on the toast remembers that hostname so the prompt is not shown again (separate from the whitelist)
 - **Debug mode** — verbose DevTools console logging for troubleshooting
 - **Report broken site** — one-click button to open a pre-filled GitHub issue for any site where the extension misbehaves; rate-limited locally (1 report per hostname per 24 h, max 5 per day) to deter abuse
-- **Zero data collection** — nothing leaves your device, ever
+- **No telemetry** — no analytics or background uploads; optional **Report broken site** opens GitHub in your browser only when you click it
 
 ---
 
@@ -110,21 +110,21 @@ Three modes to choose from:
 
 Install **[Cookie Guardian from the Edge Add-ons Store](https://microsoftedge.microsoft.com/addons/detail/cookie-guardian/hjjpapclkmjdndigcafkcmadkcjfmclj)** and click **Get**.
 
-### Manual Installation (Developer Mode)
+### Manual installation (Load unpacked)
 
-1. **Download or clone** this repository:
+1. **Either** unzip an **[end-user release](#end-user-release-zip)** folder (the directory that contains `manifest.json` next to `popup/`, `content/`, etc.) **or** clone this repository and use the repo root only if you have already run `npm run build` so `content/content.js` exists.
+
    ```bash
    git clone https://github.com/ardatrkl35/Cookie-Guardian.git
    ```
 
-2. **Open** Microsoft Edge and navigate to `edge://extensions/`  
-   *(For Chrome, navigate to `chrome://extensions/`)*
+2. **Open** Microsoft Edge and go to `edge://extensions/` (Chrome: `chrome://extensions/`).
 
-3. **Enable Developer Mode** using the toggle in the top-right corner.
+3. Turn **Developer mode** on.
 
-4. Click **Load unpacked** and select the `cookie-guardian` folder.
+4. Click **Load unpacked** and choose the folder that **directly contains** `manifest.json` (for a release zip, that is the inner folder, e.g. `cookie-guardian-1.2.0-Beta`, not the outer `.zip` file).
 
-5. The Cookie Guardian icon will appear in your toolbar. Click it to configure your preference.
+5. The Cookie Guardian icon appears in the toolbar; open it to set your preference.
 
 ---
 
@@ -165,59 +165,60 @@ These limits are stored on your device only and reset automatically after 24 hou
 
 ---
 
-## Project Structure
+## Project structure
+
+Layout matches the **[end-user release zip](#end-user-release-zip)** (what you load in **Load unpacked**). Source files such as `content/src/` and `data/cmp-profiles.json` exist **only in the Git repository** for development; they are **not** in the published folder.
 
 ```
-cookie-guardian/
-├── manifest.json              # Extension manifest (MV3)
+cookie-guardian-…/               # e.g. cookie-guardian-1.2.0-Beta (folder inside the zip)
+├── manifest.json                # MV3 manifest (version, permissions, locales)
+├── INSTALL.txt                  # Short “Load unpacked” instructions (release zip only)
+├── _locales/                    # Localized strings (e.g. en/messages.json)
 ├── icons/
-│   ├── icon16.png             # Toolbar icon (16×16)
-│   ├── icon48.png             # Extension management icon (48×48)
-│   └── icon128.png            # Store listing icon (128×128)
+│   ├── icon16.png
+│   ├── icon48.png
+│   └── icon128.png
 ├── popup/
-│   ├── popup.html             # Toolbar popup markup
-│   ├── popup.css              # Popup styles (light + dark)
-│   └── popup.js               # Popup logic — settings, whitelist, report button
+│   ├── popup.html
+│   ├── popup.css
+│   └── popup.js                 # Settings, whitelist, report, i18n
 ├── background/
-│   └── service-worker.js      # MV3 service worker — install defaults, message routing, icon overlay, InPrivate whitelist cleanup
+│   └── service-worker.js        # Defaults, messaging, toolbar icon, InPrivate whitelist cleanup
 ├── content/
-│   └── content.js             # Content script — CMP detection, DOM interaction, heuristics
-├── PRIVACY_POLICY.md          # Full privacy policy
-└── README.md                  # This file
+│   └── content.js               # Bundled content script (CMP + heuristics; built from src in repo)
+├── shared/
+│   └── hostname.js              # Hostname parsing (used by the popup)
+├── LICENSE                      # MIT (release zip)
+├── README.md                    # This file (release zip)
+├── CHANGELOG.md                 # Version history (release zip)
+├── PRIVACY_POLICY.md            # Full privacy policy (release zip)
+└── RELEASE_NOTES.md             # Phase / release notes (release zip)
 ```
+
+**Developer checkout (not shipped in the zip):** `package.json`, `content/src/*.js`, `data/cmp-profiles.json`, `.eslintrc.json`, `.github/`, etc. Run `npm install` and `npm run build` before loading from a clone, or use `npm run package:zip` to produce the tree above.
 
 ---
 
 ## How It Works
 
 ```
- ┌──────────────┐  Toggle / options ┌────────────────────┐
- │  Popup UI    │ ─────────────────► │  chrome.storage    │
- │  popup.js    │  (auto-save)       │  .sync + .local    │
- │              │                    └────────────────────┘
- │              │                           │ get()
- │              │                           ▼
- └──────┬───────┘                  ┌──────────────────────┐
-        │ sendMessage              │   Content Script     │
-        ▼                          │   content.js         │
- ┌──────────────────┐              │                      │
- │ Service Worker   │              │  1. Load settings    │
- │ service-worker   │─relay───────►│  2. Skip if disabled │
- │ .js              │              │     or whitelisted   │
- └──────────────────┘                                                │  3. Watch DOM        │
-                                  │     (MutationObserver│
-                                  │      + polling)      │
-                                  │  4. Optional: try    │
-                                  │     stored hint for  │
-                                  │     this hostname    │
-                                  │  5. Match CMP profile│
-                                  │  6. Pierce Shadow DOM│
-                                  │     (batched roots   │
-                                  │      per pass)       │
-                                  │  7. Confirm toast    │
-                                  │     (heuristic path) │
-                                  │  8. Click button     │
-                                  └──────────────────────┘
+┌──────────────┐   Toggle / options   ┌────────────────────┐
+│  Popup UI    │ ──────────────────► │ chrome.storage     │
+│  popup.js    │    (auto-save)      │ .sync + .local     │
+└──────┬───────┘                     └─────────┬──────────┘
+       │                                     │ get()
+       │ sendMessage                         ▼
+       ▼                           ┌──────────────────────┐
+┌──────────────────┐               │  Content script      │
+│ Service worker   │ ── relay ──► │  content.js          │
+│ service-worker.js│               │  • load settings     │
+└──────────────────┘               │  • skip if off / WL  │
+                                   │  • observe DOM       │
+                                   │  • optional hint     │
+                                   │  • CMP + heuristics  │
+                                   │  • confirm toast     │
+                                   │  • click / verify    │
+                                   └──────────────────────┘
 ```
 
 On each page:
@@ -237,14 +238,24 @@ On each page:
 
 ## Privacy
 
-Cookie Guardian collects **no personal data whatsoever.**
+Cookie Guardian collects **no personal data** for analytics or remote logging.
 
-- All processing is local to your device.
-- No browsing data, page content, or usage analytics are ever transmitted.
-- Core preferences use `chrome.storage.sync` (optional browser sync between your own devices).
-- Popup **Dark mode**, hostname lists (`whitelist`, always-trusted, InPrivate whitelist), and any **per-host dismissal hints** (strategy metadata after a successful dismiss) use `chrome.storage.local` and are not uploaded by the extension.
-- **Report broken site** only puts the **hostname** in the pre-filled issue. A local rate-limit record is never transmitted.
-- No third-party SDKs, analytics, or tracking of any kind are included.
+- All banner detection and clicking run **locally** in your browser.
+- The extension does **not** upload browsing history, full URLs, page content, or usage telemetry.
+- Core preferences use `chrome.storage.sync` (optional browser sync between your own signed-in devices, handled by the browser vendor).
+- Popup **Dark mode**, hostname lists (whitelist, always-trusted, InPrivate whitelist), and **per-host dismissal hints** (strategy metadata after a successful dismiss) use `chrome.storage.local` and are **not** uploaded by the extension.
+- **Report broken site** opens GitHub with a **pre-filled hostname and version string** only if you click the button; anything further is under GitHub’s policies. Local **rate-limit** entries for reports stay on your device (see table below).
+- No third-party analytics SDKs or tracking pixels are bundled.
+
+**Local storage retention** (`chrome.storage.local` host metadata only):
+
+| Key | TTL | Max entries |
+|-----|-----|-------------|
+| Per-host dismissal hints (`cg_host_dismissal_hints`) | 30 days | 500 |
+| Always-trusted domains (`cg_trusted_domains`) | No expiry | 200 |
+| Report rate-limit records (`reports`) | 7 days | 100 |
+
+Older hint/report rows and excess trusted hostnames are pruned on extension startup (content script) and when new data is written. Report checks in the popup also prune before applying the 24-hour / daily rate limits.
 
 See [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) for the full policy.
 
@@ -254,10 +265,9 @@ See [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) for the full policy.
 
 | Permission | Reason |
 |---|---|
-| `activeTab` | Identify the current tab to relay updated settings and to read the hostname for whitelist / reporting |
-| `storage` | Save and read preferences, theme, whitelists, always-trusted hosts, and local report rate limits |
-| `scripting` | Required by Manifest V3 for content script interaction with page contexts |
-| `tabs` | Find the active tab for settings relay, icon animation, and to read the current hostname for reporting |
+| `activeTab` | Access the active tab for whitelist/state checks (e.g. hostname in the popup, settings relay to the content script) |
+| `storage` | Persist user preferences and whitelist (plus theme, always-trusted hosts, and local report rate limits via `chrome.storage`) |
+| `tabs` | Query tab state for toolbar icon updates and for report URL construction (`chrome.tabs.query` / `chrome.tabs.create`) |
 | `host_permissions: <all_urls>` | Cookie banners appear on any website; the content script must run everywhere (except whitelisted hostnames, where it exits early) |
 
 ---
@@ -274,6 +284,20 @@ See [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) for the full policy.
 
 ---
 
+## End-user release zip
+
+From a dev checkout (`npm install` once), run:
+
+```bash
+npm run package:zip
+```
+
+This runs `npm run build`, then writes **`dist/cookie-guardian-<label>/`** (for example **`cookie-guardian-1.2.0-Beta`**, where `<label>` is derived from `manifest.version` and `manifest.version_name`) with everything Chrome needs to **Load unpacked**: `manifest.json`, `content/content.js`, `popup/`, `background/`, `icons/`, `_locales/`, `shared/`, plus root **`*.md`**, **`LICENSE`**, and **`INSTALL.txt`**. A matching **`dist/cookie-guardian-<label>.zip`** is created for sharing.
+
+Recipients do **not** need Node.js; they unzip and load the inner folder in `chrome://extensions`.
+
+---
+
 ## Contributing
 
 Contributions are welcome. If you find a website whose cookie banner is not handled correctly:
@@ -282,11 +306,15 @@ Contributions are welcome. If you find a website whose cookie banner is not hand
 2. Alternatively, open DevTools (`F12`), enable **Debug logging** in the popup, reload the page, and check the console for `[CookieGuardian]` messages.
 3. Note the CMP platform name (often visible in the DOM or network tab) and include it in the issue.
 
-To add support for a new CMP, add an entry to the `CMP_DICTIONARY` array in `content/content.js` following the existing pattern.
+To add support for a new CMP, add a profile object to `data/cmp-profiles.json`, then run `npm install` (once) and `npm run build` so `content/content.js` bundles the update. Ensure valid JSON and match the shape expected by `content/src/cmp-dictionary.js` (`validateProfile`).
 
 ---
 
 ## Changelog
+
+### v1.2.0 Beta (2026-04-18)
+- **CMP data pipeline:** Profiles live in `data/cmp-profiles.json`; rebuild the content bundle with `npm run build` after edits.
+- **Versioning:** Manifest `version` 1.2.0 with `version_name` **v1.2.0 Beta**; popup footer and issue reports use the display string.
 
 ### v1.1.1 (2026-04-05)
 - **Performance:** Batched shadow-root discovery **once per detection pass** (`createShadowRootCache`) — all `deepQuery` / `deepQueryAll` calls reuse the same root list; `attachToNewShadowRoots` reuses that list after each pass (no second full-document walk).
@@ -318,4 +346,4 @@ CMP selector data compiled from publicly observable DOM structures across 50+ co
 
 ---
 
-*Cookie Guardian v1.1.1 BETA · MV3 · Edge / Chrome*
+*Cookie Guardian v1.2.0 Beta · MV3 · Edge / Chrome*

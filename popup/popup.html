@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cookie Guardian</title>
+  <title></title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
@@ -11,11 +11,15 @@
   <header class="header">
     <div class="header-icon">&#x1F36A;</div>
     <div class="header-text">
-      <span class="header-title">Cookie Guardian</span>
-      <span class="header-sub">Consent Automation</span>
+      <span class="header-title" data-i18n="headerTitle"></span>
+      <span class="header-sub" data-i18n="headerSub"></span>
+      <div id="siteStatus" class="site-status" role="status" aria-live="polite">
+        <span id="siteStatusIcon" class="site-status__icon" aria-hidden="true"></span>
+        <span id="siteStatusText" class="site-status__text">—</span>
+      </div>
     </div>
     <div class="master-toggle-wrap">
-      <label class="toggle" title="Enable / Disable extension">
+      <label class="toggle" data-i18n-title="masterToggleTitle">
         <input type="checkbox" id="masterToggle" />
         <span class="toggle-track">
           <span class="toggle-thumb"></span>
@@ -29,7 +33,7 @@
 
     <!-- Preference Cards -->
     <section class="section">
-      <p class="section-label">Default Preference</p>
+      <p class="section-label" data-i18n="sectionDefaultPreference"></p>
       <div class="pref-grid">
 
         <label class="pref-card" id="cardReject">
@@ -41,8 +45,8 @@
             </svg>
           </div>
           <div class="pref-body">
-            <span class="pref-title">Reject All</span>
-            <span class="pref-desc">Only strictly necessary cookies</span>
+            <span class="pref-title" data-i18n="prefRejectTitle"></span>
+            <span class="pref-desc" data-i18n="prefRejectDesc"></span>
           </div>
           <span class="pref-check">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -60,8 +64,8 @@
             </svg>
           </div>
           <div class="pref-body">
-            <span class="pref-title">Moderate Reject</span>
-            <span class="pref-desc">Try to reject — accept if no option exists</span>
+            <span class="pref-title" data-i18n="prefModerateTitle"></span>
+            <span class="pref-desc" data-i18n="prefModerateDesc"></span>
           </div>
           <span class="pref-check">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -79,8 +83,8 @@
             </svg>
           </div>
           <div class="pref-body">
-            <span class="pref-title">Accept All</span>
-            <span class="pref-desc">Allow all cookies &amp; trackers</span>
+            <span class="pref-title" data-i18n="prefAcceptTitle"></span>
+            <span class="pref-desc" data-i18n="prefAcceptDesc"></span>
           </div>
           <span class="pref-check">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -93,103 +97,140 @@
     </section>
 
     <!-- Status toast: between Default Preference and Options (not inside Options) -->
-    <div class="toast toast--below-pref" id="toast" aria-live="polite"></div>
+    <div class="toast toast--below-pref" id="toast" role="status" aria-live="polite"></div>
 
     <!-- Options -->
     <section class="section">
-      <p class="section-label">Options</p>
+      <p class="section-label" data-i18n="sectionOptions"></p>
       <div class="option-list">
-        <label class="option-row">
-          <span class="option-text">
-            <span class="option-title">Dark mode</span>
-            <span class="option-desc">Dark appearance for this popup</span>
-          </span>
+        <div class="option-row">
+          <label for="themeToggle" class="option-label">
+            <span class="option-title" data-i18n="optDarkTitle"></span>
+            <span class="option-desc" data-i18n="optDarkDesc"></span>
+          </label>
           <label class="toggle toggle--sm">
             <input type="checkbox" id="themeToggle" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
-        </label>
+        </div>
 
-        <label class="option-row">
-          <span class="option-text">
-            <span class="option-title">Show activity badge</span>
-            <span class="option-desc">Flash a ✅ badge when a banner is handled</span>
-          </span>
+        <div class="option-row">
+          <label for="showNotifications" class="option-label">
+            <span class="option-title" data-i18n="optShowNotificationsTitle"></span>
+            <span class="option-desc" data-i18n="optShowNotificationsDesc"></span>
+          </label>
           <label class="toggle toggle--sm">
             <input type="checkbox" id="showNotifications" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
-        </label>
+        </div>
 
-        <label class="option-row">
-          <span class="option-text">
-            <span class="option-title">Confirm on new sites</span>
-            <span class="option-desc">Ask before auto-clicking on sites not yet trusted</span>
-          </span>
+        <div class="option-row">
+          <label for="firstVisitConfirm" class="option-label">
+            <span class="option-title" data-i18n="optFirstVisitTitle"></span>
+            <span class="option-desc" data-i18n="optFirstVisitDesc"></span>
+          </label>
           <label class="toggle toggle--sm">
             <input type="checkbox" id="firstVisitConfirm" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
-        </label>
+        </div>
 
         <div class="option-row option-row--action" id="whitelistRow">
           <span class="option-text">
-            <span class="option-title">Whitelist current site</span>
+            <span class="option-title" data-i18n="optWhitelistCurrentTitle"></span>
             <span class="option-desc" id="whitelistHost">—</span>
           </span>
-          <button class="wl-action-btn" id="whitelistToggleBtn" title="Add or remove this site from whitelist">
+          <button class="wl-action-btn" id="whitelistToggleBtn" data-i18n-title="whitelistActionTitle">
             <svg class="wl-icon wl-icon--add" width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
             </svg>
             <svg class="wl-icon wl-icon--check" width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="currentColor"/>
             </svg>
-            <span class="wl-action-label">Add</span>
+            <span class="wl-action-label" data-i18n="labelWhitelistAdd"></span>
           </button>
         </div>
 
-        <label class="option-row">
-          <span class="option-text">
-            <span class="option-title">Debug logging</span>
-            <span class="option-desc">Output detailed logs to DevTools console</span>
-          </span>
+        <div class="option-row">
+          <label for="debugMode" class="option-label">
+            <span class="option-title" data-i18n="optDebugTitle"></span>
+            <span class="option-desc" data-i18n="optDebugDesc"></span>
+          </label>
           <label class="toggle toggle--sm">
             <input type="checkbox" id="debugMode" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </label>
-        </label>
+        </div>
       </div>
     </section>
 
     <!-- Whitelisted Sites management -->
     <section class="section wl-section">
-      <div class="wl-header" id="wlToggleHeader">
-        <p class="section-label">Whitelisted Sites <span class="wl-context-badge" id="wlContextBadge" hidden>InPrivate</span></p>
-        <svg class="wl-chevron" id="wlChevron" width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <button type="button" id="wlToggleHeader" class="wl-header" aria-expanded="false" aria-controls="wlPanel">
+        <p class="section-label"><span data-i18n="wlSectionLabel"></span> <span class="wl-context-badge" id="wlContextBadge" hidden></span></p>
+        <svg class="wl-chevron" id="wlChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
           <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/>
         </svg>
-      </div>
+      </button>
       <div class="wl-panel" id="wlPanel">
         <div class="wl-add-row">
-          <input type="text" class="wl-input" id="wlInput" placeholder="e.g. example.com" spellcheck="false" />
-          <button class="wl-add-btn" id="wlAddBtn" title="Add domain to whitelist">
+          <input type="text" class="wl-input" id="wlInput" data-i18n-placeholder="wlInputPlaceholder" spellcheck="false" />
+          <button class="wl-add-btn" id="wlAddBtn" data-i18n-title="wlAddDomainTitle">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
             </svg>
           </button>
         </div>
         <ul class="wl-list" id="wlList"></ul>
-        <p class="wl-empty" id="wlEmpty">No whitelisted sites yet</p>
+        <p class="wl-empty" id="wlEmpty" data-i18n="wlEmpty"></p>
       </div>
+    </section>
+
+    <!-- Always trusted domains (first-visit flow) -->
+    <section class="section wl-section" id="trustedSection">
+      <button type="button" id="trustedToggleHeader" class="wl-header" aria-expanded="false" aria-controls="trustedPanel">
+        <p class="section-label" data-i18n="trustedSectionLabel"></p>
+        <svg class="wl-chevron" id="trustedChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="wl-panel" id="trustedPanel">
+        <ul class="wl-list" id="trustedList"></ul>
+        <p class="wl-empty" id="trustedEmpty" data-i18n="trustedEmpty"></p>
+      </div>
+    </section>
+
+    <!-- Stored host dismissal hints -->
+    <section class="section wl-section" id="hintsSection">
+      <button type="button" id="hintsToggleHeader" class="wl-header" aria-expanded="false" aria-controls="hintsPanel">
+        <p class="section-label"><span data-i18n="hintsSectionLabel"></span> <span class="hints-count-pill" id="hintsCount">0</span></p>
+        <svg class="wl-chevron" id="hintsChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+          <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="wl-panel" id="hintsPanel">
+        <ul class="wl-list wl-list--readonly" id="hintsList"></ul>
+        <p class="wl-empty" id="hintsEmpty" data-i18n="hintsEmpty"></p>
+      </div>
+    </section>
+
+    <!-- Clear local trust metadata -->
+    <section class="section privacy-actions" aria-labelledby="privacyActionsLabel">
+      <p class="section-label" id="privacyActionsLabel" data-i18n="privacyLocalDataLabel"></p>
+      <button type="button" class="privacy-clear-btn" id="clearMetadataBtn">
+        <span data-i18n="privacyClearAll"></span>
+      </button>
+      <p class="privacy-help" id="clearMetadataHelp" data-i18n="privacyClearHelp"></p>
     </section>
 
     <!-- Report broken site -->
     <div class="report-wrap">
-      <button class="report-btn" id="reportBtn" title="Report this site as broken on GitHub">
+      <button class="report-btn" id="reportBtn" data-i18n-title="reportBrokenSiteTitle">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="currentColor"/>
         </svg>
-        Report broken site
+        <span data-i18n="reportBrokenSite"></span>
       </button>
     </div>
 
@@ -202,7 +243,7 @@
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
                 fill="currentColor"/>
         </svg>
-        <p>Cookie Guardian is <strong>disabled</strong>.<br/>Toggle the switch above to re-enable.</p>
+        <p id="disabledOverlayMsg" class="disabled-overlay-msg"></p>
       </div>
     </div>
 
@@ -210,11 +251,12 @@
 
   <!-- ── Footer ─────────────────────────────────────────────────── -->
   <footer class="footer">
-    <a class="footer-link" href="https://github.com/ardatrkl35/Cookie-guardian" target="_blank" rel="noopener noreferrer">Cookie Guardian v1.1.1 <span class="beta-badge">BETA</span></a>
+    <a class="footer-link" href="https://github.com/ardatrkl35/Cookie-guardian" target="_blank" rel="noopener noreferrer"><span id="footerBrandVersion"></span></a>
     <span class="footer-dot">·</span>
-    <span>MV3 · Edge / Chrome</span>
+    <span data-i18n="footerMeta"></span>
   </footer>
 
+  <script src="../shared/hostname.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

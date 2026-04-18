@@ -1,9 +1,9 @@
 # Privacy Policy — Cookie Guardian
 
 **Extension Name:** Cookie Guardian  
-**Version:** 1.1.1 (BETA)  
+**Version:** 1.2.0 (BETA — display v1.2.0 Beta)  
 **Platform:** Microsoft Edge (Manifest V3) — [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/cookie-guardian/hjjpapclkmjdndigcafkcmadkcjfmclj) · Google Chrome (manual install)  
-**Last Updated:** April 5, 2026  
+**Last Updated:** April 18, 2026  
 
 ---
 
@@ -33,7 +33,7 @@ The following table describes every piece of information the extension interacts
 | "Dark mode" toggle state | You, via the popup | Stores whether the extension popup uses a dark appearance | **No** — stored only in `chrome.storage.local`; not synced |
 | **Always-trusted** hostname list (`cg_trusted_domains`) | You, when you click **Always trust** in the countdown toast | Remembers hostnames for which the confirmation toast must not be shown again | **No** — stored only in `chrome.storage.local`; never synced or transmitted |
 | **Whitelisted** hostname lists (`cg_whitelisted_domains` and, in InPrivate windows, `cg_whitelisted_domains_private`) | You, via **Whitelist current site**, manual add in **Whitelisted Sites**, or remove actions | Hostnames where the extension does not run at all (no scanning, no clicks) | **No** — stored only in `chrome.storage.local`; the InPrivate list is removed automatically when the last InPrivate window is closed |
-| Report rate-limit record (hostname + timestamp) | Automatically written when you click "Report broken site" | Enforces the per-hostname and daily report caps to prevent abuse | **No** — stored only in `chrome.storage.local`; never synced or transmitted; expires and is pruned after 24 hours |
+| Report rate-limit record (hostname + timestamp) | Automatically written when you click "Report broken site" | Enforces the per-hostname and daily report caps to prevent abuse | **No** — stored only in `chrome.storage.local`; never synced by the extension; entries are pruned on a **7-day / 100-record** retention schedule (see §3) while still enforcing the 24-hour per-host and daily caps |
 | Current page hostname (e.g. `example.com`) | Your browser's current tab | Used internally to detect reload loops, evaluate whitelist and always-trusted lists, drive the whitelist UI, and pre-fill the site hostname in a bug report | **No** — only the hostname (never the full URL, path, or query string) is used, and only locally |
 | Click counter per hostname | Computed in-memory / `sessionStorage` | Prevents the extension from entering an infinite click-reload loop | **No** — `sessionStorage` is local to the browser tab and is cleared when the tab is closed |
 | Page DOM structure | The website you are visiting | Scanned locally to detect and interact with cookie consent banners | **No** — read-only, never stored or transmitted |
@@ -63,15 +63,15 @@ Cookie Guardian uses two browser storage APIs, both entirely local to your devic
 
 1. **Popup theme** (`theme`) — `"light"` or `"dark"` from the **Dark mode** toggle. Affects only the popup’s appearance. Never synced.
 
-2. **Always-trusted hostnames** (`cg_trusted_domains`) — written only when you click **Always trust** on the countdown toast while **Confirm on new sites** is on. Used only to skip that toast on future visits to the same hostname. Distinct from the whitelist (below).
+2. **Always-trusted hostnames** (`cg_trusted_domains`) — written only when you click **Always trust** on the countdown toast while **Confirm on new sites** is on. Used only to skip that toast on future visits to the same hostname. Distinct from the whitelist (below). Retained with **no fixed expiry**; storage is capped at **200 hostnames** (oldest entries removed when the limit is exceeded). Legacy installs may store a plain list; it is migrated automatically to a timestamped map for retention.
 
 3. **Whitelisted hostnames** (`cg_whitelisted_domains`) — normal browsing profile. Sites on this list are completely ignored by the extension until you remove them.
 
 4. **InPrivate whitelist** (`cg_whitelisted_domains_private`) — separate list used only in InPrivate / incognito windows. When the last InPrivate window is closed, this key is deleted automatically so whitelists from private sessions do not persist.
 
-5. **Report rate-limit records** (`reports`) — a mapping of hostname to timestamp written automatically each time you submit a bug report via the **Report broken site** button. Used solely to enforce the rate limit (1 report per hostname per 24 hours, 5 unique hostnames per day). Records older than 24 hours are pruned automatically the next time the popup runs a report check. If you have never used the report button, this key may never be written.
+5. **Report rate-limit records** (`reports`) — a mapping of hostname to timestamp written automatically each time you submit a bug report via the **Report broken site** button. Used solely to enforce the rate limit (1 report per hostname per 24 hours, 5 unique hostnames per day). The stored map is also bounded for hygiene: entries older than **7 days** are removed, and at most **100** hostname records are kept (oldest removed first). The popup prunes this data when you open a report check and when a report is recorded; the content script prunes on startup as well. If you have never used the report button, this key may never be written.
 
-6. **Per-host dismissal hints** (`cg_host_dismissal_hints`) — a small JSON object keyed by **hostname** whose values describe **only** which dismissal strategy last succeeded on that host (for example a CMP profile identifier or a flag for the generic path). No full URLs, paths, query strings, or page content are stored. Used solely to reduce redundant detection work on repeat visits; if the remembered path no longer dismisses the banner, the extension falls back to the same full local detection logic as on first visit. Never synced. If you have never had a successful dismiss, this key may be empty or absent.
+6. **Per-host dismissal hints** (`cg_host_dismissal_hints`) — a small JSON object keyed by **hostname** whose values describe **only** which dismissal strategy last succeeded on that host (for example a CMP profile identifier or a flag for the generic path). No full URLs, paths, query strings, or page content are stored. Used solely to reduce redundant detection work on repeat visits; if the remembered path no longer dismisses the banner, the extension falls back to the same full local detection logic as on first visit. Never synced. Hints older than **30 days** are removed, and at most **500** host keys are kept (oldest removed first). Pruning runs when a hint is saved and when the content script starts on an enabled tab. If you have never had a successful dismiss, this key may be empty or absent.
 
 ---
 
@@ -81,12 +81,12 @@ The popup contains a **Report broken site** button. When clicked:
 
 1. The extension reads the **hostname** of the currently active tab (e.g. `example.com`). The full URL, path, query string, and any other page information are never accessed for this purpose.
 2. A local rate-limit check is performed against `chrome.storage.local`. If the daily cap is exceeded or the hostname was already reported within the past 24 hours, the report is blocked and the user is notified.
-3. If the check passes, a record is written to `chrome.storage.local` (hostname + current timestamp).
-4. Your browser navigates to a **GitHub issue creation page** (`https://github.com/ardatrkl35/Cookie-Guardian/issues/new`) with a pre-filled title and body containing the hostname and the extension version number. **This navigation is performed by your browser — the extension does not make any direct network request.** Once you are on GitHub, GitHub's own privacy policy and terms of service apply.
+3. If the check passes, a record is written to `chrome.storage.local` (hostname + current timestamp, stored as a compact object with a `ts` field, subject to the 7-day / 100-entry retention limits described in section 3).
+4. Your browser navigates to a **GitHub issue creation page** (`https://github.com/ardatrkl35/Cookie-Guardian/issues/new`) with a pre-filled title and body containing the hostname and the extension **display version** (from `manifest.json`’s `version_name` when set, otherwise the numeric `version`). **This navigation is performed by your browser — the extension does not make any direct network request.** Once you are on GitHub, GitHub's own privacy policy and terms of service apply.
 
 **What the pre-filled report contains:**
 - The site hostname (e.g. `example.com`)
-- The Cookie Guardian version number
+- The Cookie Guardian version string shown in the extension (display `version_name` or numeric `version` from the manifest)
 - A structured template with placeholder fields for you to fill in
 
 **What the pre-filled report does NOT contain:**
@@ -104,13 +104,10 @@ Filing the issue on GitHub requires a GitHub account. This is intentional — it
 The following permissions are declared in `manifest.json`. Each one is required for a specific, functional reason:
 
 ### `activeTab`
-**Why it is needed:** When you change settings in the popup, the extension needs to identify the currently active browser tab so it can relay updated settings to the content script running on that page. Also used to read the current tab's hostname for whitelist display and when you click **Report broken site.**
+**Why it is needed:** Access the active tab for whitelist and settings/state checks — e.g. to read the current tab's hostname in the popup, relay updated settings to the content script on that page, and when you click **Report broken site.**
 
 ### `storage`
 **Why it is needed:** Required to read and write preference settings via `chrome.storage.sync` and to read and write popup theme, always-trusted hostnames, whitelists (normal and InPrivate), and report rate-limit records via `chrome.storage.local`. This is the only persistent data the extension stores and it never leaves your device through the extension itself.
-
-### `scripting`
-**Why it is needed:** Required by Manifest V3 to support programmatic interaction with web page content. This permission enables the extension's content script framework to operate correctly across all supported page contexts, including those that require dynamic script injection at the browser engine level.
 
 ### `tabs`
 **Why it is needed:** Used by the background service worker to:  

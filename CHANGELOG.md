@@ -6,6 +6,26 @@ The format is loosely inspired by [Keep a Changelog](https://keepachangelog.com/
 
 ---
 
+## [1.2.0] — 2026-04-18 (Beta)
+
+**Display version:** v1.2.0 Beta (`manifest.json`: `version` 1.2.0, `version_name` v1.2.0 Beta).
+
+### Added
+
+- **CMP profile pipeline** — versioned `data/cmp-profiles.json` bundled into `content/content.js` via esbuild.
+- **Popup footer** — uses `version_name` when present for footer and GitHub issue prefill.
+
+### Changed
+
+- Content script loads CMP profiles from bundled JSON; rebuild with `npm run build` before packaging.
+
+### Removed (dev footprint)
+
+- `node_modules` is not required to **run** the unpacked extension; run `npm install` before `npm run build` / `npm run lint`.
+- Removed standalone profile schema/validation scripts, unit tests, and CI-only `ajv` / `jsdom` dependencies from the default tree (see git history if you need them back).
+
+---
+
 ## [1.1.1] — 2026-04-05
 
 ### Added
@@ -18,7 +38,7 @@ The format is loosely inspired by [Keep a Changelog](https://keepachangelog.com/
 
 ### Documentation
 
-- **`README.md`**, **`PRIVACY_POLICY.md`** — version and changelog updates for hints and performance.
+- `**README.md`**, `**PRIVACY_POLICY.md**` — version and changelog updates for hints and performance.
 
 ---
 
@@ -43,7 +63,7 @@ The format is loosely inspired by [Keep a Changelog](https://keepachangelog.com/
 
 ### Documentation
 
-- **`PRIVACY_POLICY.md`** and **`README.md`** updated for all popup settings, storage keys (`theme`, `cg_trusted_domains`, `cg_whitelisted_domains`, `cg_whitelisted_domains_private`, `reports`), whitelist vs always-trusted behaviour, and the Edge Add-ons listing.
+- `**PRIVACY_POLICY.md`** and `**README.md**` updated for all popup settings, storage keys (`theme`, `cg_trusted_domains`, `cg_whitelisted_domains`, `cg_whitelisted_domains_private`, `reports`), whitelist vs always-trusted behaviour, and the Edge Add-ons listing.
 
 ---
 

@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Cookie Guardian",
-  "version": "1.1.1",
-  "description": "Dismisses cookie consent banners. Choose Reject All, Moderate Reject, or Accept All on 50+ platforms.",
+  "default_locale": "en",
+  "name": "__MSG_extName__",
+  "version": "1.2.0",
+  "version_name": "v1.2.0 Beta",
+  "description": "__MSG_extDescription__",
   "author": "Cookie Guardian",
 
   "icons": {
@@ -18,7 +20,7 @@
       "48":  "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Cookie Guardian"
+    "default_title": "__MSG_extName__"
   },
 
   "background": {
@@ -37,7 +39,6 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting",
     "tabs"
   ],
 

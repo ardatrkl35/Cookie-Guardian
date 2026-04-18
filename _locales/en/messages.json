@@ -1,0 +1,350 @@
+{
+  "extName": {
+    "message": "Cookie Guardian",
+    "description": "Extension display name (manifest, toolbar)"
+  },
+  "extDescription": {
+    "message": "Dismisses cookie consent banners. Choose Reject All, Moderate Reject, or Accept All on 50+ platforms.",
+    "description": "Extension short description for manifest and store"
+  },
+  "headerTitle": {
+    "message": "Cookie Guardian",
+    "description": "Popup header main title"
+  },
+  "headerSub": {
+    "message": "Consent Automation",
+    "description": "Popup header subtitle"
+  },
+  "masterToggleTitle": {
+    "message": "Enable / Disable extension",
+    "description": "Tooltip on master enable toggle"
+  },
+  "sectionDefaultPreference": {
+    "message": "Default Preference",
+    "description": "Section label for preference cards"
+  },
+  "prefRejectTitle": {
+    "message": "Reject All",
+    "description": "Reject-all preference card title"
+  },
+  "prefRejectDesc": {
+    "message": "Only strictly necessary cookies",
+    "description": "Reject-all preference card description"
+  },
+  "prefModerateTitle": {
+    "message": "Moderate Reject",
+    "description": "Moderate preference card title"
+  },
+  "prefModerateDesc": {
+    "message": "Try to reject — accept if no option exists",
+    "description": "Moderate preference card description"
+  },
+  "prefAcceptTitle": {
+    "message": "Accept All",
+    "description": "Accept-all preference card title"
+  },
+  "prefAcceptDesc": {
+    "message": "Allow all cookies & trackers",
+    "description": "Accept-all preference card description"
+  },
+  "sectionOptions": {
+    "message": "Options",
+    "description": "Options section label"
+  },
+  "optDarkTitle": {
+    "message": "Dark mode",
+    "description": "Dark mode option title"
+  },
+  "optDarkDesc": {
+    "message": "Dark appearance for this popup",
+    "description": "Dark mode option description"
+  },
+  "optShowNotificationsTitle": {
+    "message": "Show activity badge",
+    "description": "Show notifications option title"
+  },
+  "optShowNotificationsDesc": {
+    "message": "Flash a ✅ badge when a banner is handled",
+    "description": "Show notifications option description"
+  },
+  "optFirstVisitTitle": {
+    "message": "Confirm on new sites",
+    "description": "First-visit confirm option title"
+  },
+  "optFirstVisitDesc": {
+    "message": "Ask before auto-clicking on sites not yet trusted",
+    "description": "First-visit confirm option description"
+  },
+  "optWhitelistCurrentTitle": {
+    "message": "Whitelist current site",
+    "description": "Whitelist row title"
+  },
+  "whitelistActionTitle": {
+    "message": "Add or remove this site from whitelist",
+    "description": "Tooltip on whitelist add/remove button"
+  },
+  "optDebugTitle": {
+    "message": "Debug logging",
+    "description": "Debug mode option title"
+  },
+  "optDebugDesc": {
+    "message": "Output detailed logs to DevTools console",
+    "description": "Debug mode option description"
+  },
+  "wlSectionLabel": {
+    "message": "Whitelisted Sites",
+    "description": "Collapsible whitelist panel header"
+  },
+  "wlInputPlaceholder": {
+    "message": "e.g. example.com",
+    "description": "Placeholder for manual whitelist domain input"
+  },
+  "wlAddDomainTitle": {
+    "message": "Add domain to whitelist",
+    "description": "Tooltip on add-domain button"
+  },
+  "wlEmpty": {
+    "message": "No whitelisted sites yet",
+    "description": "Empty state for whitelist list"
+  },
+  "trustedSectionLabel": {
+    "message": "Always Trusted Domains",
+    "description": "Always-trusted domains panel header"
+  },
+  "trustedEmpty": {
+    "message": "No always-trusted domains yet",
+    "description": "Empty state for trusted list"
+  },
+  "hintsSectionLabel": {
+    "message": "Host Hints",
+    "description": "Host hints panel header (count shown beside)"
+  },
+  "hintsEmpty": {
+    "message": "No host hints stored",
+    "description": "Empty state for hints list"
+  },
+  "privacyLocalDataLabel": {
+    "message": "Local data",
+    "description": "Privacy / clear data section label"
+  },
+  "privacyClearAll": {
+    "message": "Clear All Local Data",
+    "description": "Button to clear local trust metadata"
+  },
+  "privacyClearHelp": {
+    "message": "Clears host hints, always-trusted domains, and broken-site report history on this device. Whitelist entries and sync settings are kept.",
+    "description": "Help text under clear-local-data button"
+  },
+  "reportBrokenSite": {
+    "message": "Report broken site",
+    "description": "Report broken site button label"
+  },
+  "reportBrokenSiteTitle": {
+    "message": "Report this site as broken on GitHub",
+    "description": "Tooltip on report button"
+  },
+  "disabledOverlayFull": {
+    "message": "Cookie Guardian is disabled.\nToggle the switch above to re-enable.",
+    "description": "Message in disabled overlay (use line break between sentences)"
+  },
+  "footerVersionLabel": {
+    "message": "Cookie Guardian $1",
+    "description": "Footer link text with version; $1 = manifest version_name or v+version"
+  },
+  "betaBadge": {
+    "message": "BETA",
+    "description": "Beta label in footer"
+  },
+  "footerMeta": {
+    "message": "MV3 · Edge / Chrome",
+    "description": "Footer runtime line"
+  },
+  "contextInPrivate": {
+    "message": "InPrivate",
+    "description": "Badge when managing whitelist in incognito/InPrivate"
+  },
+  "placeholderBrowserPage": {
+    "message": "browser page",
+    "description": "Shown when current tab has no reportable hostname"
+  },
+  "labelWhitelistAdd": {
+    "message": "Add",
+    "description": "Whitelist toggle button when site is not listed"
+  },
+  "labelWhitelistRemove": {
+    "message": "Remove",
+    "description": "Whitelist toggle button when site is listed"
+  },
+  "labelNA": {
+    "message": "N/A",
+    "description": "Not applicable label for whitelist action"
+  },
+  "wlRemoveTitle": {
+    "message": "Remove from whitelist",
+    "description": "Tooltip on remove button in whitelist list"
+  },
+  "trustedRemoveTitle": {
+    "message": "Remove from always-trusted",
+    "description": "Tooltip on remove in trusted list"
+  },
+  "prefSavedReject": {
+    "message": "Reject All saved",
+    "description": "Toast after saving reject preference"
+  },
+  "prefSavedModerate": {
+    "message": "Moderate Reject saved",
+    "description": "Toast after saving moderate preference"
+  },
+  "prefSavedAccept": {
+    "message": "Accept All saved",
+    "description": "Toast after saving accept preference"
+  },
+  "toastSettingsSavedGeneric": {
+    "message": "Settings saved!",
+    "description": "Fallback toast when preference label missing"
+  },
+  "toastSettingsSaved": {
+    "message": "Settings saved",
+    "description": "Toast after saving options toggles"
+  },
+  "toastSaveFailed": {
+    "message": "Save failed. Try again.",
+    "description": "Toast when settings persist fails"
+  },
+  "toastInvalidDomain": {
+    "message": "Invalid domain. Use a valid hostname (letters, numbers, hyphens; no HTML or quotes).",
+    "description": "Toast when domain input is invalid"
+  },
+  "toastWhitelistFull": {
+    "message": "Whitelist is full ($1 sites max).",
+    "description": "Toast when whitelist cap reached; $1 = max count"
+  },
+  "toastWhitelisted": {
+    "message": "$1 whitelisted.",
+    "description": "Undo toast: domain was whitelisted; $1 = hostname"
+  },
+  "toastUndoButton": {
+    "message": "Undo",
+    "description": "Undo button on whitelist toast"
+  },
+  "toastUndoFailed": {
+    "message": "Could not undo. Try removing the site manually.",
+    "description": "Toast when undo whitelist fails"
+  },
+  "confirmClearLocalData": {
+    "message": "Clear all local trust metadata on this device? Whitelist and sync settings stay.",
+    "description": "Confirm dialog before clearing hints/trusted/reports"
+  },
+  "toastLocalDataCleared": {
+    "message": "Local data cleared.",
+    "description": "Toast after successful clear"
+  },
+  "toastClearFailed": {
+    "message": "Could not clear data. Try again.",
+    "description": "Toast when clear fails"
+  },
+  "toastCannotWhitelistAddress": {
+    "message": "Cannot whitelist this address.",
+    "description": "Toast when current URL cannot be whitelisted"
+  },
+  "toastRemovedFromWhitelist": {
+    "message": "$1 removed from whitelist",
+    "description": "Toast after removing domain from whitelist; $1 = domain"
+  },
+  "toastAlreadyWhitelisted": {
+    "message": "Already whitelisted",
+    "description": "Toast when adding duplicate domain"
+  },
+  "toastDomainRemoved": {
+    "message": "$1 removed",
+    "description": "Toast after removing domain from list; $1 = domain"
+  },
+  "toastRemovedFromTrusted": {
+    "message": "$1 removed from trusted",
+    "description": "Toast after removing always-trusted domain; $1 = domain"
+  },
+  "toastCannotReportBrowser": {
+    "message": "Cannot report browser pages.",
+    "description": "Toast when report on restricted URL"
+  },
+  "toastReportCooldown": {
+    "message": "Already reported. Try again in $1h.",
+    "description": "Toast when report cooldown active; $1 = hours"
+  },
+  "toastReportDailyLimit": {
+    "message": "Daily report limit reached (5/day).",
+    "description": "Toast when daily report cap hit"
+  },
+  "toastOpeningGithub": {
+    "message": "Opening GitHub — thanks!",
+    "description": "Toast before opening issue page"
+  },
+  "toastReportFailed": {
+    "message": "Failed to submit report. Please try again.",
+    "description": "Toast when report flow throws"
+  },
+  "siteStatusUnavailable": {
+    "message": "Status unavailable on this page",
+    "description": "Site status line when hostname missing"
+  },
+  "siteStatusDisabled": {
+    "message": "Extension disabled",
+    "description": "Site status when extension off"
+  },
+  "siteStatusWhitelisted": {
+    "message": "Site whitelisted",
+    "description": "Site status when site on whitelist"
+  },
+  "siteStatusNoTab": {
+    "message": "Could not read active tab",
+    "description": "Site status when tab id missing"
+  },
+  "siteStatusPageUnavailable": {
+    "message": "Page state unavailable",
+    "description": "Site status when content script did not respond"
+  },
+  "siteStatusAwaitingConfirm": {
+    "message": "Awaiting your confirmation",
+    "description": "Site status during first-visit toast"
+  },
+  "siteStatusBannerHandled": {
+    "message": "Banner handled",
+    "description": "Site status after banner dismissed"
+  },
+  "siteStatusNoBanner": {
+    "message": "No banner found",
+    "description": "Site status when detection exhausted"
+  },
+  "siteStatusWatching": {
+    "message": "Watching this page",
+    "description": "Site status while monitoring"
+  },
+  "contentToastTitle": {
+    "message": "Cookie Guardian",
+    "description": "Title on in-page first-visit countdown toast"
+  },
+  "contentToastBodyPrefix": {
+    "message": "Cookie banner detected — handling in ",
+    "description": "Countdown toast body before seconds number"
+  },
+  "contentToastBodySuffix": {
+    "message": "s",
+    "description": "Countdown toast body after seconds (unit)"
+  },
+  "contentBtnAlwaysTrust": {
+    "message": "Always trust",
+    "description": "Always trust button on in-page toast"
+  },
+  "contentBtnCancel": {
+    "message": "Cancel",
+    "description": "Cancel button on in-page toast"
+  },
+  "reportIssueTitle": {
+    "message": "[Broken Site] $1",
+    "description": "GitHub new-issue title; $1 = hostname"
+  },
+  "reportIssueBody": {
+    "message": "**Site:** `$1`\n**Extension version:** $2\n\n**What happened:**\n<!-- Describe what Cookie Guardian did wrong on this site -->\n\n**Expected behaviour:**\n<!-- What should have happened instead? -->\n\n**Browser / OS:**\n<!-- e.g. Chrome 124, Windows 11 -->\n\n---\n*Reported via the Cookie Guardian popup. Only the hostname was shared — no full URLs or personal data.*",
+    "description": "GitHub new-issue body; $1 = hostname, $2 = extension version"
+  }
+}

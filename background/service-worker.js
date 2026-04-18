@@ -1,5 +1,6 @@
+importScripts('../shared/hostname.js');
 // =============================================================================
-// Cookie Guardian — Background Service Worker  v1.1.1
+// Cookie Guardian — Background Service Worker  v1.2.0 Beta
 // Handles installation defaults and message routing from the popup.
 //
 // FIX NOTES (v3.1):
@@ -33,16 +34,11 @@ chrome.runtime.onInstalled.addListener(function (details) {
 });
 
 // ── Helper: safely send a message to one tab (never throws) ──────────────────
-function sendToTab(tabId, payload) {
+async function sendToTab(tabId, payload) {
   try {
-    // chrome.tabs.sendMessage returns a Promise in MV3.
-    // We don't need the response, so we just suppress any rejection.
-    const result = chrome.tabs.sendMessage(tabId, payload);
-    if (result && typeof result.then === 'function') {
-      result.then(null, function () { /* tab has no content script — ignore */ });
-    }
+    await chrome.tabs.sendMessage(tabId, payload);
   } catch (_e) {
-    // Tab closed between query and send — ignore
+    // Restricted URL, no receiver, tab closed, or other runtime error — ignore
   }
 }
 
@@ -57,43 +53,83 @@ function getBaseBitmap() {
   return _baseBitmapPromise;
 }
 
+// ── Toolbar badge fallback when OffscreenCanvas / setIcon path fails (JOB_19) ─
+const BADGE_STATES = {
+  handled: { text: '✓', color: '#4CAF50' },
+  active:  { text: '·', color: '#2196F3' },
+  error:   { text: '!', color: '#f44336' },
+  off:     { text: '', color: '#9E9E9E' },
+};
+
+async function applyIconBadgeFallback(tabId, state) {
+  const cfg = BADGE_STATES[state] || BADGE_STATES.off;
+  try {
+    await chrome.action.setBadgeText({ tabId, text: cfg.text });
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: cfg.color });
+  } catch (e) {
+    console.warn('[CookieGuardian] Badge fallback chrome.action failed:', e);
+  }
+}
+
 // ── Helper: draw base icon with ✅ overlay, revert after 2 s ──────────────────
-function drawOverlayIcon(tabId) {
+function drawOverlayIcon(tabId, state) {
+  if (state === undefined || state === null) {
+    state = 'handled';
+  }
   var SIZE = 128;
 
+  if (typeof OffscreenCanvas === 'undefined') {
+    void applyIconBadgeFallback(tabId, state);
+    return;
+  }
+
   getBaseBitmap().then(function (bitmap) {
-    var canvas = new OffscreenCanvas(SIZE, SIZE);
-    var ctx = canvas.getContext('2d');
-    ctx.drawImage(bitmap, 0, 0, SIZE, SIZE);
+    try {
+      var canvas = new OffscreenCanvas(SIZE, SIZE);
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, SIZE, SIZE);
 
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-    ctx.beginPath();
-    ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+      ctx.beginPath();
+      ctx.arc(SIZE / 2, SIZE / 2, SIZE / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
 
-    ctx.font = '110px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('\u2705', SIZE / 2, SIZE / 2 + 4);
+      ctx.font = '110px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u2705', SIZE / 2, SIZE / 2 + 4);
 
-    var overlayData = ctx.getImageData(0, 0, SIZE, SIZE);
+      var overlayData = ctx.getImageData(0, 0, SIZE, SIZE);
 
-    chrome.action.setIcon({ imageData: overlayData, tabId: tabId }).then(function () {
-      setTimeout(function () {
-        var revertCanvas = new OffscreenCanvas(SIZE, SIZE);
-        var rctx = revertCanvas.getContext('2d');
-        rctx.drawImage(bitmap, 0, 0, SIZE, SIZE);
-        var baseData = rctx.getImageData(0, 0, SIZE, SIZE);
+      chrome.action.setBadgeText({ tabId, text: '' }).catch(function () {});
 
-        chrome.action.setIcon({ imageData: baseData, tabId: tabId }).catch(function () {});
-      }, 2000);
-    }).catch(function (e) {
-      console.warn('[CookieGuardian] setIcon overlay failed:', e);
-    });
+      chrome.action.setIcon({ imageData: overlayData, tabId: tabId }).then(function () {
+        setTimeout(function () {
+          try {
+            var revertCanvas = new OffscreenCanvas(SIZE, SIZE);
+            var rctx = revertCanvas.getContext('2d');
+            rctx.drawImage(bitmap, 0, 0, SIZE, SIZE);
+            var baseData = rctx.getImageData(0, 0, SIZE, SIZE);
+
+            chrome.action.setIcon({ imageData: baseData, tabId: tabId }).catch(function () {});
+          } catch (revertErr) {
+            console.warn('[CookieGuardian] Icon revert canvas failed:', revertErr);
+            void applyIconBadgeFallback(tabId, 'off');
+          }
+        }, 2000);
+      }).catch(function (e) {
+        console.warn('[CookieGuardian] setIcon overlay failed:', e);
+        void applyIconBadgeFallback(tabId, state);
+      });
+    } catch (err) {
+      console.warn('[CookieGuardian] Icon canvas path failed, using badge fallback:', err);
+      void applyIconBadgeFallback(tabId, state);
+    }
   }).catch(function (e) {
     console.warn('[CookieGuardian] drawOverlayIcon failed:', e);
+    void applyIconBadgeFallback(tabId, state);
   });
 }
 
@@ -130,7 +166,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
           !tab.url.startsWith('edge://') &&
           !tab.url.startsWith('about:')
         ) {
-          sendToTab(tab.id, {
+          void sendToTab(tab.id, {
             type:     'SETTINGS_UPDATED',
             settings: message.settings,
           });
@@ -157,7 +193,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
           !tab.url.startsWith('edge://') &&
           !tab.url.startsWith('about:')
         ) {
-          sendToTab(tab.id, { type: 'WHITELIST_UPDATED' });
+          void sendToTab(tab.id, { type: 'WHITELIST_UPDATED' });
         }
       }
     });
